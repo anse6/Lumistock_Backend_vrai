@@ -1,0 +1,80 @@
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html dir="ltr" xmlns="http://www.w3.org/1999/xhtml" lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta content="telephone=no" name="format-detection">
+  <title>{{ titre }}</title>
+</head>
+
+<!-- Email à lien unique : invitation (définir son mot de passe) ou réinitialisation.
+     Aucun mot de passe n'est jamais écrit dans un email. -->
+<body style="width:100%;height:100%;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;padding:0;Margin:0">
+  <div dir="ltr" lang="fr" style="background-color:#FAFAFA">
+    <table width="100%" cellspacing="0" cellpadding="0" role="none"
+      style="border-collapse:collapse;border-spacing:0px;padding:0;Margin:0;width:100%;height:100%;background-color:#FAFAFA">
+      <tr>
+        <td valign="top" style="padding:0;Margin:0">
+          <table bgcolor="#ffffff" align="center" cellpadding="0" cellspacing="0" role="none"
+            style="border-collapse:collapse;border-spacing:0px;background-color:#FFFFFF;width:600px;max-width:100%">
+            <tr>
+              <td align="left" style="padding:15px 20px 25px 20px;Margin:0">
+                <table cellpadding="0" cellspacing="0" width="100%" role="presentation"
+                  style="border-collapse:collapse;border-spacing:0px">
+                  <tr>
+                    <td align="center" style="Margin:0;padding:15px 40px">
+                      <h1
+                        style="Margin:0;font-family:arial, 'helvetica neue', helvetica, sans-serif;font-size:30px;font-weight:700;line-height:36px;color:#0F172A">
+                        {{ titre }}</h1>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td align="left" style="padding:0;Margin:0;padding-top:10px">
+                      <p style="Margin:0;font-family:arial, 'helvetica neue', helvetica, sans-serif;line-height:24px;color:#0F172A;font-size:16px;text-align:center">
+                        Bonjour {{ prenom }} 👋,</p>
+                      <p style="Margin:15px 0;font-family:arial, 'helvetica neue', helvetica, sans-serif;line-height:24px;color:#0F172A;font-size:16px;text-align:center">
+                        {{ introduction }}</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td align="center" style="padding:10px 0 20px 0;Margin:0">
+                      <a href="{{ lien }}" target="_blank"
+                        style="display:inline-block;background:#0F172A;color:#FFFFFF;font-family:arial, 'helvetica neue', helvetica, sans-serif;font-size:18px;font-weight:700;text-decoration:none;padding:12px 28px;border-radius:8px">
+                        {{ bouton }}</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td align="left" style="padding:0;Margin:0">
+                      <p style="Margin:0 0 10px;font-family:arial, 'helvetica neue', helvetica, sans-serif;line-height:21px;color:#475569;font-size:14px;text-align:center">
+                        Ce lien est personnel, ne fonctionne qu'une seule fois et expire dans {{ duree }}.</p>
+                      <p style="Margin:0 0 10px;font-family:arial, 'helvetica neue', helvetica, sans-serif;line-height:21px;color:#475569;font-size:14px;text-align:center">
+                        Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>
+                        <span style="word-break:break-all;color:#0F172A">{{ lien }}</span></p>
+                      <p style="Margin:0 0 10px;font-family:arial, 'helvetica neue', helvetica, sans-serif;line-height:21px;color:#475569;font-size:14px;text-align:center">
+                        Si vous n'êtes pas à l'origine de cette demande, ignorez cet email : votre compte reste protégé.</p>
+                      <p style="Margin:20px 0 0;font-family:arial, 'helvetica neue', helvetica, sans-serif;line-height:21px;color:#0F172A;font-size:16px;text-align:center">
+                        L’équipe Lumistock.</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+          <table align="center" cellpadding="0" cellspacing="0" role="none"
+            style="border-collapse:collapse;border-spacing:0px;background-color:transparent;width:600px;max-width:100%">
+            <tr>
+              <td align="center" style="padding:20px;Margin:0">
+                <p style="Margin:0;font-family:arial, 'helvetica neue', helvetica, sans-serif;line-height:18px;color:#0F172A;font-size:12px">
+                  LUMISTOCK &copy; 2026. Tous droits réservés.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>

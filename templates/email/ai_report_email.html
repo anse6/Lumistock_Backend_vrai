@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapport IA Quotidien - LUMISTOCK</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #f0f4f8;
+            color: #2d3748;
+            line-height: 1.6;
+        }
+
+        .wrapper {
+            max-width: 680px;
+            margin: 30px auto;
+            background: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10);
+        }
+
+        /* ── HEADER ── */
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            padding: 36px 40px;
+            text-align: center;
+        }
+
+        .header .logo-text {
+            font-size: 28px;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: 2px;
+        }
+
+        .header .logo-text span {
+            color: #e94560;
+        }
+
+        .header .subtitle {
+            color: #a0aec0;
+            font-size: 13px;
+            margin-top: 6px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* ── BANNER ── */
+        .banner {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .banner .greeting {
+            color: #ffffff;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .banner .date-badge {
+            background: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        /* ── STATS ROW ── */
+        .stats-row {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .stat-card {
+            flex: 1;
+            padding: 20px;
+            text-align: center;
+            border-right: 1px solid #e2e8f0;
+        }
+
+        .stat-card:last-child {
+            border-right: none;
+        }
+
+        .stat-card .stat-value {
+            font-size: 28px;
+            font-weight: 800;
+            color: #4c51bf;
+        }
+
+        .stat-card .stat-label {
+            font-size: 11px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+
+        /* ── ALERT BADGES ── */
+        .alert-summary {
+            padding: 20px 40px;
+            background: #fff5f5;
+            border-left: 4px solid #fc8181;
+            margin: 24px 40px;
+            border-radius: 8px;
+        }
+
+        .alert-summary.ok {
+            background: #f0fff4;
+            border-left-color: #68d391;
+        }
+
+        .alert-summary .alert-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #c53030;
+            margin-bottom: 8px;
+        }
+
+        .alert-summary.ok .alert-title {
+            color: #276749;
+        }
+
+        .alert-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin: 3px;
+        }
+
+        .badge-rupture {
+            background: #fff5f5;
+            color: #c53030;
+            border: 1px solid #fc8181;
+        }
+
+        .badge-critique {
+            background: #fffaf0;
+            color: #c05621;
+            border: 1px solid #f6ad55;
+        }
+
+        .badge-dormant {
+            background: #fffff0;
+            color: #744210;
+            border: 1px solid #f6e05e;
+        }
+
+        .badge-imminente {
+            background: #fff5f5;
+            color: #9b2c2c;
+            border: 1px solid #feb2b2;
+        }
+
+        /* ── RAPPORT SECTION ── */
+        .rapport-container {
+            padding: 0 40px 30px;
+        }
+
+        .rapport-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .rapport-content {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 24px;
+            font-size: 14px;
+            line-height: 1.8;
+            color: #4a5568;
+            white-space: pre-wrap;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* ── FOOTER ── */
+        .footer {
+            background: #2d3748;
+            padding: 24px 40px;
+            text-align: center;
+        }
+
+        .footer p {
+            color: #a0aec0;
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+
+        .footer .brand {
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .footer .brand span {
+            color: #e94560;
+        }
+
+        .footer .auto-note {
+            margin-top: 12px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            color: #718096;
+            font-size: 11px;
+        }
+
+        /* Divider */
+        .divider {
+            height: 1px;
+            background: #e2e8f0;
+            margin: 0 40px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrapper">
+
+        <!-- HEADER -->
+        <div class="header">
+            <div class="logo-text">LUMI<span>STOCK</span></div>
+            <div class="subtitle">Rapport IA Quotidien · Intelligence Artificielle</div>
+        </div>
+
+        <!-- BANNER -->
+        <div class="banner">
+            <div class="greeting">Bonjour {{ admin_name }}</div>
+            <div class="date-badge">{{ date_rapport }}</div>
+        </div>
+
+        <!-- STATS ROW -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value">{{ nb_produits }}</div>
+                <div class="stat-label">Produits</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ nb_livraisons_30j }}</div>
+                <div class="stat-label">Livraisons (30j)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value {% if nb_alertes > 0 %}style=" color:#e53e3e"{% endif %}">{{ nb_alertes }}</div>
+                <div class="stat-label">Alertes IA</div>
+            </div>
+        </div>
+
+        <!-- ALERT BADGES -->
+        {% if alertes %}
+        <div class="alert-summary" style="margin-top:24px;">
+            <div class="alert-title">{{ nb_alertes }} alerte(s) détectée(s) pour {{ magasin_name }}</div>
+            {% for alerte in alertes %}
+            {% if alerte.type == 'rupture' %}
+            <span class="alert-badge badge-rupture">Rupture: {{ alerte.produit }}</span>
+            {% elif alerte.type == 'stock_critique' %}
+            <span class="alert-badge badge-critique">Stock critique: {{ alerte.produit }} ({{
+                alerte.pourcentage_restant }}%)</span>
+            {% elif alerte.type == 'produit_dormant' %}
+            <span class="alert-badge badge-dormant">Dormant: {{ alerte.produit }}</span>
+            {% elif alerte.type == 'rupture_imminente' %}
+            <span class="alert-badge badge-imminente">Rupture dans ~{{ alerte.jours_avant_rupture }}j: {{
+                alerte.produit }}</span>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert-summary ok" style="margin-top:24px;">
+            <div class="alert-title">Aucune alerte critique détectée aujourd'hui</div>
+            <p style="font-size:13px; color:#276749;">Tous vos stocks sont à des niveaux satisfaisants.</p>
+        </div>
+        {% endif %}
+
+        <div class="divider"></div>
+
+        <!-- RAPPORT IA -->
+        <div class="rapport-container" style="margin-top:24px;">
+            <div class="rapport-title">
+                Analyse complète de l'IA pour <strong>{{ magasin_name }}</strong>
+            </div>
+            <div class="rapport-content">{{ rapport_ia }}</div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <div class="brand">LUMI<span>STOCK</span> · Système de gestion de livraison</div>
+            <p style="margin-top:8px;">Ce rapport est généré automatiquement chaque jour à 8h00.</p>
+            <div class="auto-note">
+                Généré par Intelligence Artificielle (LLaMA 3.3 70B via Groq) · {{ date_rapport }}<br>
+                Cet email est envoyé automatiquement, merci de ne pas y répondre.
+            </div>
+        </div>
+
+    </div>
+</body>
+
+</html>
