@@ -865,6 +865,7 @@ def serialize_livraison(livraison):
                 "motif": r.get("motif", ""),
                 "montant_retour": r.get("montant_retour"),
                 "montant_a_rembourser": r.get("montant_a_rembourser"),
+                "frais_retour": r.get("frais_retour", 0),
                 "manager_id": str(r["manager_id"]) if r.get("manager_id") else None,
                 "livreur_id": str(r["livreur_id"]) if r.get("livreur_id") else None,
                 "created_at": r.get("created_at")

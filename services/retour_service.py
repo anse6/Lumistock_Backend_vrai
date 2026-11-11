@@ -410,6 +410,7 @@ def creer_retour_livraison(data):
             "is_conditionne": bool(produits_livres_dict[key].get("is_conditionne")),
             "conditionnement_id": produits_livres_dict[key].get("conditionnement_id"),
             "conditionnement_nom": produits_livres_dict[key].get("conditionnement_nom"),
+            "facteur": produits_livres_dict[key].get("facteur"),
         }
         for key, q in total_retournes.items()
     ]
