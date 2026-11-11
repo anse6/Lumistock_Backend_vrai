@@ -185,7 +185,9 @@ def creer_retour_livraison(data):
     total_retournes = {}
     # Articles suivis par numéro de série : quelles unités reviennent.
     from services import numeros_serie_service as ns
+    from services.livraison_service import est_livraison_manager
     retours_serie = {}
+    abimes_par_produit, abimes_par_cle = {}, {}
 
     for produit in produits:
         key = (
@@ -209,6 +211,25 @@ def creer_retour_livraison(data):
 
         if quantite_retour <= 0:
             return {"error": f"Quantité retournée invalide pour l'article {produit['produit_id']}"}, 400
+
+        # Unités rendues abîmées : elles ne reviennent pas dans le stock vendable,
+        # elles partent en avarie (perte comptée au coût d'achat).
+        try:
+            abimes = int(produit.get("abimes") or 0)
+        except (TypeError, ValueError):
+            return {"error": "Nombre d'unités abîmées invalide"}, 400
+        nom_article = produits_livres_dict[key].get("nom") if key in produits_livres_dict else produit["produit_id"]
+        if abimes < 0 or abimes > quantite_retour:
+            return {"error": f"« {nom_article} » : {abimes} unité(s) abîmée(s) sur {quantite_retour} retournée(s), "
+                             "c'est impossible."}, 400
+        if abimes:
+            if not est_livraison_manager(livraison):
+                return {"error": "Vente d'un gérant : déclarez les unités abîmées depuis l'écran Avaries de son stock."}, 400
+            if ns.est_suivi(ProduitModel.get_by_id(str(produit["produit_id"]))):
+                return {"error": f"« {nom_article} » est suivi par numéro de série : déclarez l'unité abîmée "
+                                 "depuis l'écran Avaries pour désigner son numéro."}, 400
+            abimes_par_produit[str(produit["produit_id"])] = abimes_par_produit.get(str(produit["produit_id"]), 0) + abimes
+            abimes_par_cle[key] = abimes_par_cle.get(key, 0) + abimes
 
         quantite_livree = produit_livre["quantite"]
         deja_retournee = total_retournes.get(key, 0)
@@ -251,7 +272,6 @@ def creer_retour_livraison(data):
 
     # Même règle que l'annulation : une vente de gérant (même validée ensuite
     # par un manager, qui y inscrit son manager_id) rend le stock au gérant.
-    from services.livraison_service import est_livraison_manager
     if not est_livraison_manager(livraison):
         # On s'assure que chaque produit a bien une clé "quantite"
         for produit in produits:
@@ -306,6 +326,19 @@ def creer_retour_livraison(data):
                 acteur=acteur_retour_magasin,
                 type_mouvement="retour dans stock magasin"
             )
+
+        # Unités abîmées : déclarées en avarie, comme depuis l'écran Avaries.
+        from services.produit_service import manage_expired_product_service
+        motif = (validated_data.get("motif") or "").strip()
+        for produit_id, abimes in abimes_par_produit.items():
+            resultat, statut = manage_expired_product_service(produit_id, {
+                "quantite": abimes,
+                "type_avarie": "deteriore",
+                "description": "Retour client abîmé" + (f" : {motif}" if motif else ""),
+                "admin_id": validated_data.get("manager_id"),
+            })
+            if statut >= 400:
+                return resultat, statut
 
     # ─── CORRECTION BUG : inclure la dette_ancienne dans le recalcul ───────────
     # La dette_ancienne fait partie du montant_total original et ne doit pas
@@ -411,6 +444,7 @@ def creer_retour_livraison(data):
             "conditionnement_id": produits_livres_dict[key].get("conditionnement_id"),
             "conditionnement_nom": produits_livres_dict[key].get("conditionnement_nom"),
             "facteur": produits_livres_dict[key].get("facteur"),
+            "abimes": abimes_par_cle.get(key, 0),
         }
         for key, q in total_retournes.items()
     ]
@@ -456,6 +490,7 @@ def creer_retour_livraison(data):
         "montant_retour": valeur_retour,
         "montant_a_rembourser": surplus_client,
         "total_a_rembourser": a_rembourser,
+        "abimes": sum(abimes_par_produit.values()),
         "frais_retour": frais_retour,
         "frais_retour_ht": frais_retour_ht,
         "frais_retour_tva": frais_retour_tva,
