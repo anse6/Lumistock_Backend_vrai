@@ -336,8 +336,10 @@ def creer_retour_livraison(data):
 
     # Les réductions commerciales s'appliquent au montant restant après retour.
     from services.reductions_service import appliquer_reductions
-    montant_brut = round(nouveau_montant_produits, 2)
-    from services.tva_service import decimales_magasin
+    # Arrondi à l'unité de la devise : rendre 1 bouteille d'une palette à
+    # 1 700/6 ne doit pas laisser 1 416,67 FCFA ni rembourser 283,33.
+    from services.tva_service import arrondir, decimales_magasin
+    montant_brut = arrondir(nouveau_montant_produits, decimales_magasin(livraison.get("magasin_id")))
     reductions, total_reductions = appliquer_reductions(
         livraison.get("reductions") or [], montant_brut, decimales_magasin(livraison.get("magasin_id")))
     nouveau_montant_produits = round(montant_brut - total_reductions, 2)

@@ -43,8 +43,10 @@ class LivraisonModel:
 
         # Réductions commerciales (rabais, remise, ristourne) en cascade
         from services.reductions_service import appliquer_reductions
-        montant_brut = round(montant_total, 2)
-        from services.tva_service import decimales_magasin
+        # Montant des articles arrondi à l'unité de la devise (le franc CFA n'a
+        # pas de centimes : 2 palettes à 1 700/6 la bouteille = 3 400, pas 3 399,99).
+        from services.tva_service import arrondir, decimales_magasin
+        montant_brut = arrondir(montant_total, decimales_magasin(data.get("magasin_id")))
         reductions, total_reductions = appliquer_reductions(
             data.get("reductions"), montant_brut, decimales_magasin(data.get("magasin_id")))
         montant_total = round(montant_brut - total_reductions, 2)

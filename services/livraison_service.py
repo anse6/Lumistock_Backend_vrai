@@ -31,12 +31,13 @@ def _reductions_modification(livraison, validated_data, update_fields, montant_l
     """Recalcule les réductions lors d'une modification et retourne le montant net des produits."""
     if not produits_modifies and "reductions" not in validated_data:
         return montant_lignes  # rien ne change : montant net déjà en base
-    brut = montant_lignes if produits_modifies else float(
+    decimales = tva_service.decimales_magasin(livraison.get("magasin_id"))
+    brut = tva_service.arrondir(montant_lignes, decimales) if produits_modifies else float(
         livraison.get("montant_brut", livraison.get("montant_produits", 0)) or 0
     )
     source = validated_data["reductions"] if "reductions" in validated_data else (livraison.get("reductions") or [])
     detail, total = reductions_service.appliquer_reductions(
-        source, brut, tva_service.decimales_magasin(livraison.get("magasin_id")))
+        source, brut, decimales)
     net = round(brut - total, 2)
     update_fields.update({
         "montant_brut": round(brut, 2),

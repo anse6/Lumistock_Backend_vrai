@@ -137,3 +137,21 @@ def test_palette_regles(client, m):
     for i, (conds, attendu) in enumerate(cas):
         r = _creer(client, m, conds, nom=f"P{i}")
         assert r.status_code == 400 and attendu in r.get_json()["error"], (conds, r.get_json())
+
+
+def test_retour_d_une_bouteille_d_une_palette_sans_centimes(client, m):
+    """Palette de 6 à 1 700 (283,33… la bouteille) : rendre 1 bouteille laisse
+    1 417 FCFA, pas 1 416,67, et le remboursement est de 283 FCFA."""
+    pid = _creer(client, m, [{"nom": "Palette", "facteur": 6, "prix_conditionnement": 1700}],
+                 prix="300", achat="250", nom="Eau ronde").get_json()["produit_id"]
+    pal = str(_article(client, pid)["conditionnements"][0]["_id"])
+    vid = client.post("/admin_or_manager/livraisons", json={
+        "produits": [{"produit_id": pid, "conditionnement_id": pal, "quantite_conditionnement": 1}],
+        "statut_paiement": "payé", "montant_paye": 1700, "paiements": [{"methode": "cash", "montant": 1700}]},
+        headers=_h(m)).get_json()["livraison_id"]
+    r = client.post("/livraisons/retour", json={"livraison_id": vid, "motif": "abîmée", "retenue_pourcentage": 0,
+        "produits": [{"produit_id": pid, "is_conditionne": True, "conditionnement_id": pal, "quantite": 1}]}, headers=_h(m))
+    assert r.status_code == 201, r.get_json()
+    assert r.get_json()["montant_a_rembourser"] == 283
+    vente = _vente(client, vid)
+    assert vente["montant_total"] == 1417 and vente["montant_paye"] == 1417 and vente["retour"] == 283
