@@ -14,11 +14,16 @@ from utils.jwt_token import generate_token
 def setup_manager_and_approvisionnement(app):
     with app.app_context():
         magasin_id = "662c0cbf6b5a4a1f25facc22"
+        # Le magasin doit exister et être actif, sinon la connexion est refusée (401).
+        if not db.tables.magasin.find_one({"_id": ObjectId(magasin_id)}):
+            db.tables.magasin.insert_one({"_id": ObjectId(magasin_id), "denomination": "Magasin test",
+                                          "is_active": True, "created_at": datetime.utcnow()})
         manager_id = UserModel.get_collection().insert_one({
             "name": "Manager",
             "first_name": "Test",
             "email": "manager@test.com",
             "role": "manager",
+            "is_active": True,
             "magasin_id": ObjectId(magasin_id),
             "created_at": datetime.utcnow()
         }).inserted_id
@@ -27,6 +32,7 @@ def setup_manager_and_approvisionnement(app):
             "first_name": "Test",
             "email": "livreur@test.com",
             "role": "livreur",
+            "is_active": True,
             "magasin_id": ObjectId(magasin_id),
             "created_at": datetime.utcnow()
         }).inserted_id

@@ -17,6 +17,10 @@ from utils.jwt_token import generate_token  # JWT utilitaire
 def setup_livreur_and_client(app):
     with app.app_context():
         magasin_id = "662c0cbf6b5a4a1f25facc22"
+        # Le magasin doit exister et être actif, sinon la connexion est refusée (401).
+        if not db.tables.magasin.find_one({"_id": ObjectId(magasin_id)}):
+            db.tables.magasin.insert_one({"_id": ObjectId(magasin_id), "denomination": "Magasin test",
+                                          "is_active": True, "created_at": datetime.utcnow()})
 
         # Création du livreur
         livreur_id = UserModel.create_livreur(

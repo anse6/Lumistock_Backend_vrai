@@ -16,11 +16,16 @@ from utils.jwt_token import generate_token
 def setup_manager_and_approvisionnement(app):
     with app.app_context():
         magasin_id = "662c0cbf6b5a4a1f25facc22"
+        # Le magasin doit exister et être actif, sinon la connexion est refusée (401).
+        if not db.tables.magasin.find_one({"_id": ObjectId(magasin_id)}):
+            db.tables.magasin.insert_one({"_id": ObjectId(magasin_id), "denomination": "Magasin test",
+                                          "is_active": True, "created_at": datetime.utcnow()})
         manager_id = UserModel.get_collection().insert_one({
             "name": "Manager",
             "first_name": "Test",
             "email": "manager@test.com",
             "role": "manager",
+            "is_active": True,
             "magasin_id": ObjectId(magasin_id),
             "created_at": datetime.utcnow()
         }).inserted_id
@@ -29,6 +34,7 @@ def setup_manager_and_approvisionnement(app):
             "first_name": "Test",
             "email": "livreur@test.com",
             "role": "livreur",
+            "is_active": True,
             "magasin_id": ObjectId(magasin_id),
             "created_at": datetime.utcnow()
         }).inserted_id
@@ -77,20 +83,14 @@ def test_approvisionnement_details_success(client, setup_manager_and_approvision
         f"/approvisionnements/{setup_manager_and_approvisionnement['approvisionnement_id']}",
         headers={"Authorization": f"Bearer {token}"}
     )
-    assert response.status_code == 200
+    assert response.status_code == 200, response.get_json()
     data = response.get_json()
-    assert isinstance(data, list)  # Vérifier que la réponse est une liste
-    assert len(data) == 2
-    assert isinstance(data[0], dict)  # Premier élément est un dictionnaire
-    assert data[1] == 200  # Second élément est le code de statut
-    assert data[0]["id"] == setup_manager_and_approvisionnement["approvisionnement_id"]
-    assert data[0]["montant"] == 10000  # 10 * 1000
-    assert data[0]["quantite"] == 10
-    assert data[0]["produits"][0]["nom"] == "Savon"
-    assert data[0]["produits"][0]["quantite_livreur"] == 10
-    assert "first_name" in data[0]
-    assert "last_name" in data[0]
-    assert "created_at" in data[0]
+    assert data["id"] == setup_manager_and_approvisionnement["approvisionnement_id"]
+    assert data["montant"] == 10000  # 10 * 1000
+    assert data["quantite"] == 10
+    assert data["produits"][0]["nom"] == "Savon"
+    assert data["produits"][0]["quantite_livreur"] == 10
+    assert "first_name" in data and "last_name" in data and data["created_at"].endswith("Z")
 
 def test_approvisionnement_details_unauthorized(client, setup_manager_and_approvisionnement):
     """
@@ -104,17 +104,11 @@ def test_approvisionnement_details_unauthorized(client, setup_manager_and_approv
 def test_approvisionnement_details_not_found(client, setup_manager_and_approvisionnement):
     """
     Teste l'accès aux détails d'un approvisionnement inexistant.
-    Note : L'implémentation actuelle retourne un code HTTP 200 avec [ {"message": "Approvisionnement introuvable"}, 404 ]
-    au lieu d'un code HTTP 404. Cela devrait être corrigé à l'avenir pour respecter les conventions REST.
     """
     token = generate_token(user_id=setup_manager_and_approvisionnement["livreur_id"], role="livreur")
     response = client.get(
         "/approvisionnements/662b9c2c8f5b4a1e24688d1c",  # ID inexistant
         headers={"Authorization": f"Bearer {token}"}
     )
-    assert response.status_code == 200  # Actuellement, la route retourne 200 au lieu de 404
-    data = response.get_json()
-    assert isinstance(data, list)
-    assert len(data) == 2
-    assert data[0]["message"] == "Approvisionnement introuvable"
-    assert data[1] == 404
+    assert response.status_code == 404
+    assert response.get_json()["message"] == "Approvisionnement introuvable"
