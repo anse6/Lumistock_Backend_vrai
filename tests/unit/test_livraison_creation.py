@@ -49,7 +49,7 @@ def test_livraison_produit_inexistant(mock_get_by_id):
     }
     response, status = creer_livraison(data)
     assert status == 404
-    assert "Produit" in response["error"]
+    assert "Article" in response["error"]
 
 
 @patch("services.livraison_service.ProduitModel.get_by_id")

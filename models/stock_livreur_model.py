@@ -6,9 +6,9 @@ from extensions import db
 
 
 """
-Ce modèle permet de gérer les produits disponibles dans le stock d’un livreur.
+Ce modèle permet de gérer les articles disponibles dans le stock d’un livreur.
 
-Il permet d’ajouter ou retirer des quantités, ainsi que de récupérer la liste ou une quantité spécifique d’un produit.
+Il permet d’ajouter ou retirer des quantités, ainsi que de récupérer la liste ou une quantité spécifique d’un article.
 
 Lorsqu’un livreur fait une livraison, les quantités sont diminuées ici, et le stock du magasin avait déjà été diminué lors de l’approvisionnement.
 """
@@ -145,12 +145,12 @@ class StockLivreurModel:
         stock = StockLivreurModel.get_collection().find_one(filtre)
 
         if not stock:
-            raise Exception(f"Produit {produit_id} non trouvé dans le stock du livreur {livreur_id}")
+            raise Exception(f"Article {produit_id} non trouvé dans le stock du livreur {livreur_id}")
 
         nouvelle_quantite = stock["quantite"] - quantite
 
         if nouvelle_quantite < 0:
-            raise Exception(f"Stock insuffisant pour le produit {produit_id} chez le livreur {livreur_id}")
+            raise Exception(f"Stock insuffisant pour l'article {produit_id} chez le livreur {livreur_id}")
 
         if nouvelle_quantite == 0:
             StockLivreurModel.get_collection().delete_one({"_id": stock["_id"]})

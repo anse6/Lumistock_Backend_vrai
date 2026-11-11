@@ -56,45 +56,61 @@ def validate_licence(licence):
         raise ValidationError("Le nombre maximal de caissiers doit être un entier positif ou nul.")
 
 # Création d'un nouveau magasin
-def create_magasin(data, logo_file=None):
-    try:
-        magasin_data = {
-            "denomination": data["denomination"],
-            "pays": data["pays"],
-            "ville": data["ville"],
-            "quartier": data["quartier"],
-            "email": data["email"].strip().lower(),
-            "activité": data["activité"]
-        }
-        magasin_data.update(_store_optional_data(data))
-        _validate_store_phone(magasin_data.get("country_code"), magasin_data["telephone"])
+def _texte(data, cle):
+    return str(data.get(cle) or "").strip()
 
+
+def _preparer_nouveau_magasin(data):
+    """Magasin et administrateur prêts à enregistrer, mêmes règles pour la
+    création par le staff et l'inscription publique.
+
+    :return: (magasin_data, admin_data)
+    :raises ValueError: téléphone ou profil de l'administrateur invalide,
+        email déjà utilisé (message clair pour l'utilisateur).
+    """
+    from services.profil_utilisateur import nettoyer_profil
+
+    magasin_data = {
+        "denomination": _texte(data, "denomination"),
+        "pays": _texte(data, "pays"),
+        "ville": _texte(data, "ville"),
+        "quartier": _texte(data, "quartier"),
+        "email": _texte(data, "email").lower(),
+        "activité": _texte(data, "activité"),
+    }
+    optionnels = _store_optional_data(data)
+    magasin_data.update({k: v.strip() if isinstance(v, str) else v for k, v in optionnels.items()})
+    _validate_store_phone(magasin_data.get("country_code"), magasin_data.get("telephone"))
+
+    admin_data = {
+        "name": _texte(data, "admin_name"),
+        "first_name": _texte(data, "admin_first_name"),
+        "email": _texte(data, "admin_email").lower(),
+    }
+    # Profil facultatif de l'administrateur, validé comme partout ailleurs
+    # (téléphone international, sexe, âge minimum, longueur de la fonction).
+    profil = {cle: data.get(f"admin_{cle}") for cle in ("telephone", "sexe", "date_naissance", "fonction")
+              if data.get(f"admin_{cle}") not in (None, "")}
+    admin_data.update(nettoyer_profil(profil, "admin"))
+
+    if MagasinModel.get_magasin_by_email(magasin_data["email"]):
+        raise ValueError("Un magasin avec cet email existe déjà.")
+    if UserModel.find_by_email(admin_data["email"]):
+        raise ValueError("Un compte utilisateur avec cet email existe déjà.")
+    return magasin_data, admin_data
+
+
+def create_magasin(data, logo_file=None):
+    """Création par le staff : magasin actif, licence choisie, invitation de l'admin."""
+    try:
+        magasin_data, admin_data = _preparer_nouveau_magasin(data)
         licence_data = {
             "nombre_manager": data["nombre_manager"],
             "nombre_livreur": data["nombre_livreur"],
             "nombre_caissier": data.get("nombre_caissier", MAX_CAISSIERS_DEFAUT),
         }
-
-        admin_data = {
-            "name": data["admin"]["name"],
-            "first_name": data["admin"]["first_name"],
-            "email": data["admin"]["email"].strip().lower(),
-        }
-        for field in ("sexe", "date_naissance", "telephone", "fonction"):
-            if data["admin"].get(field) not in (None, ""):
-                admin_data[field] = data["admin"][field]
-        
+        # Logo enregistré seulement une fois tout validé (sinon fichier orphelin).
         magasin_data["logo"] = _save_logo(logo_file)
-
-        
-        # Vérifier si l'email du magasin est déjà utilisé ou des comptes admin
-        existing_magasin = MagasinModel.get_magasin_by_email(magasin_data["email"])
-        if existing_magasin:
-            return {"message": "Un magasin avec cet email existe déjà.", "status": 400}
-        if UserModel.find_by_email(admin_data["email"]):
-            return {"message": "Un compte admin avec cet email existe déjà.", "status": 400}
-        # Créer le magasin et l'admin
-
         result = MagasinModel.create_magasin(magasin_data, licence_data, admin_data)
 
         # Aucun mot de passe par email : l'admin reçoit un lien d'invitation.
@@ -113,20 +129,11 @@ def create_magasin(data, logo_file=None):
     except Exception as e:
         return {"message": f"Erreur serveur : {str(e)}", "status": 500}
 
-# Service pour l'auto-inscription publique
-def register_magasin_service(data, logo_file=None):
-    try:
-        magasin_data = {
-            "denomination": data["denomination"],
-            "pays": data["pays"],
-            "ville": data["ville"],
-            "quartier": data["quartier"],
-            "email": data["email"].strip().lower(),
-            "activité": data["activité"]
-        }
-        magasin_data.update(_store_optional_data(data))
-        _validate_store_phone(magasin_data.get("country_code"), magasin_data["telephone"])
 
+def register_magasin_service(data, logo_file=None):
+    """Inscription publique : magasin inactif, à valider par le staff."""
+    try:
+        magasin_data, admin_data = _preparer_nouveau_magasin(data)
         # Licence d'essai : 2 managers, 2 gérants et 2 caissiers (le staff
         # l'ajuste ensuite si besoin).
         licence_data = {
@@ -134,33 +141,12 @@ def register_magasin_service(data, logo_file=None):
             "nombre_livreur": 2,
             "nombre_caissier": MAX_CAISSIERS_DEFAUT,
         }
-
-        admin_data = {
-            "name": data["admin_name"].strip(),
-            "first_name": data["admin_first_name"].strip(),
-            "email": data["admin_email"].strip().lower(),
-        }
-        # Profil facultatif de l'admin, validé comme partout ailleurs.
-        from services.profil_utilisateur import nettoyer_profil
-        profil = {cle: data.get(f"admin_{cle}") for cle in ("telephone", "sexe", "date_naissance", "fonction")
-                  if data.get(f"admin_{cle}") not in (None, "")}
-        admin_data.update(nettoyer_profil(profil, "admin"))
-        
         magasin_data["logo"] = _save_logo(logo_file)
-
-        # Vérifier si l'email du magasin ou de l'admin existe
-        if MagasinModel.get_magasin_by_email(magasin_data["email"]):
-            return {"message": "Un magasin avec cet email existe déjà.", "status": 400}
-        
-        if UserModel.find_by_email(admin_data["email"]):
-            return {"message": "Un compte utilisateur avec cet email existe déjà.", "status": 400}
-
-        # Créer le magasin et l'admin en mode INACTIF
         result = MagasinModel.create_magasin(magasin_data, licence_data, admin_data, is_active=False)
-        
+
         # Envoyer l'email de confirmation d'inscription (en attente)
         send_registration_pending_email(admin_data["email"], magasin_data["denomination"])
-        
+
         return {
             "message": "Inscription réussie ! Votre magasin est en attente de validation par le staff.",
             "magasin_id": result["magasin_id"],

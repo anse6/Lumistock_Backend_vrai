@@ -7,6 +7,14 @@ from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 
 
+
+def _ca_ht(vente):
+    """Chiffre d'affaires HT d'une vente : articles après remises et retours,
+    sans TVA ni frais de retour (même règle que la page Finance)."""
+    from services.stats_staff_service import _ca_ht as ca
+    return ca(vente)
+
+
 def get_villes_livraison_livreur(livreur_id):
     """
     Retourne les zones (quartiers) de vente des 4 meilleures villes pour un livreur.
@@ -97,11 +105,11 @@ def get_chiffre_affaires_total_par_livreur(livreur_id):
 
     # Chiffre d'affaires de la semaine actuelle
     current_livraisons = LivraisonModel.get_livraisons_between_dates(start_date, end_date, livreur_id)
-    current_total = sum(l.get("montant_total", 0) for l in current_livraisons)
+    current_total = sum(_ca_ht(l) for l in current_livraisons)
 
     # Chiffre d'affaires de la semaine précédente
     previous_livraisons = LivraisonModel.get_livraisons_between_dates(previous_start, previous_end, livreur_id)
-    previous_total = sum(l.get("montant_total", 0) for l in previous_livraisons)
+    previous_total = sum(_ca_ht(l) for l in previous_livraisons)
 
     # Calcul de la variation
     if previous_total == 0:
@@ -111,7 +119,7 @@ def get_chiffre_affaires_total_par_livreur(livreur_id):
 
     # Chiffre d'affaires global (toutes périodes)
     all_livraisons = LivraisonModel.get_livraisons_by_livreur(livreur_id)
-    total = sum(l.get("montant_total", 0) for l in all_livraisons)
+    total = sum(_ca_ht(l) for l in all_livraisons)
 
     return {
         "valeur": round(total, 2),  # Chiffre d'affaires total toutes périodes

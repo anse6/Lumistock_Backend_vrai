@@ -146,10 +146,10 @@ def get_vue_ensemble_magasin(magasin_id, jours=30):
     for v in courantes:
         statut = v.get("statut_paiement")
         statuts[statut if statut in STATUTS_PAIEMENT else "non payé"] += 1
-        ht = _num(v.get("montant_produits")) or sum(_num(l.get("quantite")) * _num(l.get("prix")) for l in v.get("produits") or [])
+        ht = _num(v.get("montant_produits")) if v.get("montant_produits") is not None else sum(_num(l.get("quantite")) * _num(l.get("prix")) for l in v.get("produits") or [])
         for l in v.get("produits") or []:
             pid = str(l.get("produit_id"))
-            produits[pid]["nom"] = l.get("nom") or produits[pid]["nom"] or "Produit"
+            produits[pid]["nom"] = l.get("nom") or produits[pid]["nom"] or "Article"
             produits[pid]["quantite"] += _num(l.get("quantite"))
             produits[pid]["montant"] += _num(l.get("quantite")) * _num(l.get("prix"))
         if v.get("client_id"):
@@ -220,7 +220,7 @@ def get_vue_ensemble_magasin(magasin_id, jours=30):
         q = _num(prod.get("quantite"))
         valeur_stock += max(q, 0) * _num(prod.get("prix_achat"))
         seuil = prod.get("seuil_alerte")
-        item = {"id": str(prod["_id"]), "nom": prod.get("nom") or "Produit", "quantite": q,
+        item = {"id": str(prod["_id"]), "nom": prod.get("nom") or "Article", "quantite": q,
                 "seuil": seuil, "image": prod.get("image")}
         if q <= 0:
             # Un produit soldé épuisé ne se réapprovisionne pas : ce n'est pas une rupture.

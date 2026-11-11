@@ -27,6 +27,7 @@ def import_produits_from_excel(fichier, magasin_id):
         "Description": "description",
         "Prix": "prix",
         "Prix d'achat": "prix_achat",
+        "Coût d'achat": "prix_achat",
         "Unité": "unite",
         "Quantité": "quantite",
         "Catégorie": "categorie",

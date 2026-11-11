@@ -20,6 +20,7 @@ from bson import ObjectId
 from extensions import db
 from models.fournisseur_model import FournisseurModel
 from models.produit_model import ProduitModel
+from services import numeros_serie_service
 from services.cloture_service import verifier_dates
 from services.rapport_service import _arrondi, _date, _num
 
@@ -105,7 +106,7 @@ def creer(magasin_id, data, admin_id=None):
     for i, l in enumerate(lignes_demandees, start=1):
         produit = ProduitModel.get_for_magasin(l.get("produit_id"), magasin_id)
         if not produit:
-            raise ValueError(f"Ligne {i} : produit introuvable dans ce magasin.")
+            raise ValueError(f"Ligne {i} : article introuvable dans ce magasin.")
         try:
             quantite = int(l.get("quantite"))
             prix = float(l.get("prix_achat"))
@@ -113,8 +114,18 @@ def creer(magasin_id, data, admin_id=None):
             raise ValueError(f"Ligne {i} : quantité (nombre entier) et prix d'achat obligatoires.")
         if quantite <= 0 or prix < 0:
             raise ValueError(f"Ligne {i} : quantité positive et prix d'achat positif ou nul attendus.")
-        lignes.append({"produit_id": str(produit["_id"]), "nom": produit.get("nom") or "Produit",
-                       "quantite": quantite, "prix_achat": prix, "total": round(quantite * prix, 2)})
+        ligne = {"produit_id": str(produit["_id"]), "nom": produit.get("nom") or "Article",
+                 "quantite": quantite, "prix_achat": prix, "total": round(quantite * prix, 2)}
+        if numeros_serie_service.est_suivi(produit):
+            try:
+                ligne["numeros_serie"] = numeros_serie_service.verifier_nouveaux(
+                    produit, l.get("numeros_serie"), quantite)
+            except numeros_serie_service.ErreurNumeroSerie as err:
+                raise ValueError(f"Ligne {i} : {err}")
+        lignes.append(ligne)
+    tous = [n for l in lignes for n in l.get("numeros_serie") or []]
+    if len({numeros_serie_service.cle(n) for n in tous}) != len(tous):
+        raise ValueError("Un même numéro de série figure sur deux lignes de la facture.")
 
     montant_ht = round(sum(l["total"] for l in lignes), 2)
     montant_tva = round(_num(data.get("montant_tva")), 2)
@@ -149,6 +160,7 @@ def creer(magasin_id, data, admin_id=None):
     for l in lignes:
         resultat, statut = approvisionner_produit_service(l["produit_id"], {
             "quantite": l["quantite"], "prix_achat": l["prix_achat"], "admin_id": admin_id, "facture_id": str(facture_id),
+            "numeros_serie": l.get("numeros_serie"), "fournisseur_id": str(fournisseur_id) if fournisseur_id else None,
         })
         if statut != 200:  # ne devrait pas arriver : lignes vérifiées plus haut
             raise ValueError(resultat.get("error") or "Entrée en stock impossible.")
@@ -268,10 +280,13 @@ def avoir(facture_id, magasin_id, data, par=None):
         if quantite <= 0:
             continue
         if not origine:
-            raise ValueError("Ce produit ne figure pas sur la facture.")
+            raise ValueError("Cet article ne figure pas sur la facture.")
         if quantite > origine["quantite"] - deja.get(pid, 0):
             raise ValueError(f"{origine['nom']} : {origine['quantite'] - deja.get(pid, 0)} unité(s) au plus peuvent être rendues.")
         produit = ProduitModel.get_for_magasin(pid, magasin_id)
+        if numeros_serie_service.est_suivi(produit):
+            raise ValueError(f"{origine['nom']} est suivi par numéro de série : le retour au fournisseur "
+                             "n'est pas encore possible pour ces articles.")
         if not produit or _num(produit.get("quantite")) < quantite:
             raise ValueError(f"{origine['nom']} : stock insuffisant ({_num((produit or {}).get('quantite')):g} en stock) "
                              "pour rendre ces articles.")

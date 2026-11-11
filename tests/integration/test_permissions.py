@@ -63,7 +63,7 @@ def test_droits_par_defaut(client, magasin):
 def test_activer_creation_produit_pour_le_manager(client, magasin):
     r = client.post("/produits", json={}, headers=_h(magasin, "manager"))
     assert r.status_code == 403
-    assert "Créer des produits" in r.get_json()["message"]
+    assert "Créer des articles" in r.get_json()["message"]
 
     r = client.put("/magasin/permissions", json={"droits": {"produits.creer": {"manager": True}}},
                    headers=_h(magasin, "admin"))

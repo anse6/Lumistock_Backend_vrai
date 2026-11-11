@@ -185,14 +185,41 @@ class MagasinModel:
 
     @staticmethod
     def delete_magasin_definitively(magasin_id):
-        """Supprime définitivement un magasin déjà archivé."""
-        result = MagasinModel.get_collection().delete_one({
-            "_id": ObjectId(magasin_id),
-            "deleted_at": {"$exists": True},
-        })
-        if result.deleted_count > 0:
-            return {"message": "Magasin supprimé définitivement avec succès."}
-        return {"message": "Magasin archivé non trouvé."}
+        """Supprime définitivement un magasin déjà archivé, avec toutes ses données.
+
+        Avant, seule la fiche du magasin disparaissait : ses produits, comptes,
+        ventes… restaient en base sans magasin (données orphelines). Tout est
+        supprimé dans la même transaction : soit tout part, soit rien.
+        """
+        from database.schema import tables
+
+        oid = ObjectId(magasin_id)
+        filtre = {"magasin_id": {"$in": [oid, str(oid)]}}
+        with db.transaction():
+            magasin = MagasinModel.get_collection().find_one({"_id": oid, "deleted_at": {"$exists": True}})
+            if not magasin:
+                return {"message": "Magasin archivé non trouvé."}
+
+            users = [u["_id"] for u in db.tables.users.find(filtre, {"_id": 1})]
+            ids_users = {"$in": [*users, *(str(u) for u in users)]}
+            conversations = [c["_id"] for c in db.tables.chat_conversations.find(filtre, {"_id": 1})]
+
+            # Données rattachées aux comptes ou aux conversations du magasin.
+            if users:
+                db.tables.deux_facteurs.delete_many({"user_id": ids_users})
+                db.tables.revoked_tokens.delete_many({"user_id": ids_users})
+                db.tables.stocks_livreur.delete_many({"livreur_id": ids_users})
+            if conversations:
+                db.tables.chat_messages.delete_many(
+                    {"conversation_id": {"$in": [*conversations, *(str(c) for c in conversations)]}})
+
+            # Toutes les tables qui portent un magasin_id (produits, ventes, users…).
+            for nom, table in tables.items():
+                if nom != "magasin" and "magasin_id" in table.c:
+                    db.tables[nom].delete_many(filtre)
+
+            MagasinModel.get_collection().delete_one({"_id": oid})
+        return {"message": "Magasin supprimé définitivement avec succès."}
         
     
     

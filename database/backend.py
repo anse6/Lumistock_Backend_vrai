@@ -203,7 +203,7 @@ class Repository:
     def __init__(self, database, table):
         self.database, self.table = database, table
 
-    def _where(self, query):
+    def _predicates(self, query):
         predicates = []
         # IDs are always stored in VARCHAR columns, even when the API uses ObjectId.
         # Other filters are rechecked in Python for legacy missing/null semantics.
@@ -215,19 +215,50 @@ class Repository:
                 predicates.append(column == str(value))
             elif isinstance(value, dict) and set(value) == {"$in"} and all(isinstance(v, (ObjectId, str)) for v in value["$in"]):
                 predicates.append(column.in_([str(v) for v in value["$in"]]))
+        return predicates
+
+    def _where(self, query):
+        predicates = self._predicates(query)
         return and_(*predicates) if predicates else True
 
     def _read(self, query, connection=None, lock=False):
-        statement = select(self.table).where(self._where(query))
-        if lock or self.database._active.get() is not None:
+        """Documents correspondant à ``query``.
+
+        Verrouillage (SELECT … FOR UPDATE) dans une transaction :
+        - une recherche ciblée par identifiant (_id, magasin_id, client_id…)
+          verrouille les lignes visées, comme avant : un lire-puis-écrire
+          (stock, crédit client, règlements) reste protégé ;
+        - une recherche sans identifiant (email, nom…) n'est plus verrouillée :
+          avant, elle verrouillait TOUTE la table, tous magasins confondus ;
+        - une modification sans identifiant (``lock=True``) cherche d'abord les
+          lignes sans verrou, puis verrouille uniquement celles-ci et relit
+          leur état actuel avant de les modifier.
+        """
+        predicates = self._predicates(query)
+        statement = select(self.table)
+        if predicates:
+            statement = statement.where(and_(*predicates))
+        en_transaction = self.database._active.get() is not None
+        if predicates and (lock or en_transaction):
             statement = statement.with_for_update()
+
+        def lire(connection):
+            rows = connection.execute(statement).mappings().all()
+            documents = [document for document in (from_row(self.table, row) for row in rows)
+                         if matches(document, query)]
+            if lock and not predicates and documents:
+                cibles = select(self.table).where(
+                    self.table.c._id.in_([str(document["_id"]) for document in documents])
+                ).with_for_update()
+                rows = connection.execute(cibles).mappings().all()
+                documents = [document for document in (from_row(self.table, row) for row in rows)
+                             if matches(document, query)]
+            return documents
+
         if connection is None:
             with self.database.connection() as connection:
-                rows = connection.execute(statement).mappings().all()
-        else:
-            rows = connection.execute(statement).mappings().all()
-        documents = [from_row(self.table, row) for row in rows]
-        return [document for document in documents if matches(document, query)]
+                return lire(connection)
+        return lire(connection)
 
     def find(self, query=None, projection=None):
         return Cursor(self, query or {}, projection)

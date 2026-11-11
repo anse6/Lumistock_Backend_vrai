@@ -100,7 +100,7 @@ def _verifier_contenu(data, magasin_id):
 
     for produit in (data or {}).get("produits") or []:
         if isinstance(produit, dict) and not ProduitModel.get_for_magasin(produit.get("produit_id"), magasin_id):
-            return jsonify({"error": f"Produit {produit.get('produit_id')} introuvable dans votre magasin."}), 400
+            return jsonify({"error": f"Article {produit.get('produit_id')} introuvable dans votre magasin."}), 400
     client_id = (data or {}).get("client_id")
     if client_id:
         client = ClientModel.get_client_by_id(client_id) if ObjectId.is_valid(str(client_id)) else None

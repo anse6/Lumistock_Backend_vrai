@@ -4,15 +4,15 @@ from marshmallow import Schema, fields
 from marshmallow.validate import OneOf
 
 class ProduitCommandeSchema(Schema):
-    produit_id = fields.String(required=True, metadata={"description": "ID du produit commandé"})
-    nom = fields.String(required=True, metadata={"description": "Nom du produit"})
+    produit_id = fields.String(required=True, metadata={"description": "ID de l'article commandé"})
+    nom = fields.String(required=True, metadata={"description": "Nom de l'article"})
     quantite = fields.Integer(required=True, metadata={"description": "Quantité commandée"})
     prix = fields.Float(required=True, metadata={"description": "Prix unitaire"})
 
 class CreateCommandeSchema(Schema):
     client_id = fields.String(required=True, metadata={"description": "ID du client"})
     magasin_id = fields.String(required=True, metadata={"description": "ID du magasin"})
-    produits = fields.List(fields.Nested(ProduitCommandeSchema), required=True, metadata={"description": "Liste des produits commandés"})
+    produits = fields.List(fields.Nested(ProduitCommandeSchema), required=True, metadata={"description": "Liste des articles commandés"})
     montant_total = fields.Float(required=True, metadata={"description": "Montant total de la commande"})
     statut = fields.String(
         required=False,
@@ -29,7 +29,7 @@ class CreateCommandeSchema(Schema):
 class UpdateCommandeSchema(Schema):
     client_id = fields.String(metadata={"description": "ID du client"})
     magasin_id = fields.String(metadata={"description": "ID du magasin"})
-    produits = fields.List(fields.Nested(ProduitCommandeSchema), metadata={"description": "Liste des produits commandés"})
+    produits = fields.List(fields.Nested(ProduitCommandeSchema), metadata={"description": "Liste des articles commandés"})
     montant_total = fields.Float(metadata={"description": "Montant total de la commande"})
     statut = fields.String(
         validate=OneOf(["en_attente", "validée", "livrée", "annulée"]),

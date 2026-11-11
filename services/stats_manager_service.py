@@ -9,6 +9,14 @@ from models.produit_model import ProduitModel # Needed for Product name
 from models.charge_model import ChargeModel # Nouveau
 
 
+
+def _ca_ht(vente):
+    """Chiffre d'affaires HT d'une vente : articles après remises et retours,
+    sans TVA ni frais de retour (même règle que la page Finance)."""
+    from services.stats_staff_service import _ca_ht as ca
+    return ca(vente)
+
+
 def get_villes_livraison_total():
     """
     Retourne les zones (quartiers) de vente des 4 meilleures villes pour un livreur.
@@ -99,11 +107,11 @@ def get_chiffre_affaires_total():
 
     # Chiffre d'affaires de la semaine actuelle
     current_livraisons = LivraisonModel.get_livraisons_between_dates(start_date, end_date)
-    current_total = sum(l.get("montant_total", 0) for l in current_livraisons)
+    current_total = sum(_ca_ht(l) for l in current_livraisons)
 
     # Chiffre d'affaires de la semaine précédente
     previous_livraisons = LivraisonModel.get_livraisons_between_dates(previous_start, previous_end)
-    previous_total = sum(l.get("montant_total", 0) for l in previous_livraisons)
+    previous_total = sum(_ca_ht(l) for l in previous_livraisons)
 
     # Calcul de la variation
     if previous_total == 0:
@@ -113,7 +121,7 @@ def get_chiffre_affaires_total():
 
     # Chiffre d'affaires global (toutes périodes)
     all_livraisons = LivraisonModel.get_all_livraisons()
-    total = sum(l.get("montant_total", 0) for l in all_livraisons)
+    total = sum(_ca_ht(l) for l in all_livraisons)
 
     return {
         "valeur": round(total, 2),  # Chiffre d'affaires total toutes périodes
@@ -551,7 +559,7 @@ def get_rapport_livraisons_dtailles(granularite="jour", date_ref=None, livreur_i
         
         for p in l.get("produits", []):
             pid = str(p.get("produit_id"))
-            p_nom = produits_map.get(pid, "Produit supprimé")
+            p_nom = produits_map.get(pid, "Article supprimé")
             qte = int(p.get("quantite", 0))
             prix_u = float(p.get("prix", 0))
             prix_tot = qte * prix_u

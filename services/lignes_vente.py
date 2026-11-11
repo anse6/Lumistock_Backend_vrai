@@ -52,18 +52,18 @@ def valider_lignes_vente(produits):
     from models.produit_model import ProduitModel
 
     if not isinstance(produits, list) or not produits:
-        return "La vente doit contenir au moins un produit.", 400
+        return "La vente doit contenir au moins un article.", 400
 
     for ligne in produits:
         if not isinstance(ligne, dict) or not ligne.get("produit_id"):
-            return "Ligne de produit invalide.", 400
+            return "Ligne d'article invalide.", 400
         produit_id = ligne["produit_id"]
         try:
             produit = ProduitModel.get_by_id(str(produit_id))
         except Exception:  # identifiant mal formé
             produit = None
         if not produit:
-            return f"Produit {produit_id} introuvable", 404
+            return f"Article {produit_id} introuvable", 404
         nom = produit.get("nom") or str(produit_id)
 
         if "conditionnement_id" in ligne and "quantite_conditionnement" in ligne:
@@ -83,7 +83,7 @@ def valider_lignes_vente(produits):
         prix_achat = _nombre(produit.get("prix_achat")) or 0
         if prix_achat > 0 and round(prix, 6) < round(prix_achat, 6):
             # Le montant n'est pas affiché : le gérant ne voit pas les prix d'achat.
-            return f"Prix de vente refusé pour « {nom} » : il est inférieur au prix d'achat du produit.", 400
+            return f"Prix de vente refusé pour « {nom} » : il est inférieur au prix d'achat de l'article.", 400
     return None
 
 

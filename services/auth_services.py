@@ -207,7 +207,20 @@ def refresh_user_token(user_id):
     if not user:
         return jsonify({"error": "Utilisateur non trouvé"}), 401
     access_token = create_access_token(identity=str(user["_id"]), additional_claims=_claims(user))
-    return jsonify({"access_token": access_token}), 200
+    reponse = {"access_token": access_token}
+
+    # Session glissante : passé la moitié de sa durée, le refresh token est
+    # remplacé, pour qu'un utilisateur actif ne soit pas déconnecté au bout de
+    # 7 jours. L'ancien n'est pas révoqué (il expire seul) : un autre onglet qui
+    # l'utilise au même moment n'est pas déconnecté.
+    from flask import current_app
+    from flask_jwt_extended import get_jwt
+    duree = current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()
+    import time
+    restant = float(get_jwt().get("exp", 0)) - time.time()
+    if restant < duree / 2:
+        reponse["refresh_token"] = create_refresh_token(identity=str(user["_id"]), additional_claims=_claims(user))
+    return jsonify(reponse), 200
 
 
 def logout_service(payload_courant, refresh_token=None):

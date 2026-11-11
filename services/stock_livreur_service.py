@@ -158,7 +158,7 @@ def retourner_stock_magasin(livreur_id, produits_data):
     Vérifie le stock du livreur avant le transfert.
     """
     if not produits_data:
-        return {"error": "Aucun produit spécifié"}, 400
+        return {"error": "Aucun article spécifié"}, 400
 
     # 1. Validation des stocks
     for item in produits_data:
@@ -166,11 +166,11 @@ def retourner_stock_magasin(livreur_id, produits_data):
         quantite = int(item.get("quantite", 0))
 
         if quantite <= 0:
-            return {"error": f"Quantité invalide pour le produit {produit_id}"}, 400
+            return {"error": f"Quantité invalide pour l'article {produit_id}"}, 400
 
         stock_actuel = StockLivreurModel.get_produit_quantite(livreur_id, produit_id)
         if stock_actuel < quantite:
-            return {"error": f"Stock insuffisant pour le produit {produit_id}. Disponible: {stock_actuel}, demandé: {quantite}"}, 400
+            return {"error": f"Stock insuffisant pour l'article {produit_id}. Disponible: {stock_actuel}, demandé: {quantite}"}, 400
 
     # 2. Exécution du transfert
     for item in produits_data:
@@ -190,7 +190,7 @@ def retourner_stock_magasin(livreur_id, produits_data):
                 type_mouvement="retour stock livreur"
             )
 
-    return {"message": "Produits retournés au magasin avec succès"}, 200
+    return {"message": "Articles retournés au magasin avec succès"}, 200
 
 
 

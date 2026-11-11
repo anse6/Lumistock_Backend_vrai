@@ -42,20 +42,35 @@ class StoreProfileSchema(Schema):
     fuseau_horaire = fields.String(required=False, allow_none=True, validate=validate.Length(max=80))
 
 
-class CreateMagasinSchema(StoreProfileSchema):
-    denomination = fields.String(required=True, validate=validate.Length(min=3))
-    pays = fields.String(required=True)
-    logo = fields.String(required=False)
-    ville = fields.String(required=True)
-    quartier = fields.String(required=True)
+class NouveauMagasinSchema(StoreProfileSchema):
+    """Magasin et administrateur : champs communs à la création par le staff et
+    à l'inscription publique (mêmes règles des deux côtés)."""
+    denomination = fields.String(required=True, validate=validate.Length(min=3, max=120))
+    pays = fields.String(required=True, validate=validate.Length(min=1))
+    ville = fields.String(required=True, validate=validate.Length(min=1))
+    quartier = fields.String(required=True, validate=validate.Length(min=1, max=120))
     email = fields.Email(required=True)
     telephone = fields.String(required=True, validate=validate.Regexp(r"^\+[1-9]\d{6,14}$"))
-    activité = fields.String(required=True)
+    activité = fields.String(required=True, validate=validate.Length(min=1, max=255))
+
+    # Administrateur du magasin, à plat. Pas de mot de passe : il reçoit un
+    # lien pour choisir le sien.
+    admin_name = fields.String(required=True, validate=validate.Length(min=2, max=80))
+    admin_first_name = fields.String(required=True, validate=validate.Length(min=2, max=80))
+    admin_email = fields.Email(required=True)
+    # Facultatifs, validés ensuite par services.profil_utilisateur.
+    admin_telephone = fields.String(required=False, allow_none=True)
+    admin_sexe = fields.String(required=False, allow_none=True)
+    admin_date_naissance = fields.String(required=False, allow_none=True)
+    admin_fonction = fields.String(required=False, allow_none=True, validate=validate.Length(max=100))
+
+
+class CreateMagasinSchema(NouveauMagasinSchema):
+    """Création par le staff : le magasin est actif et sa licence est choisie."""
+    logo = fields.String(required=False)
     nombre_manager = fields.Int(required=True, validate=validate.Range(min=1))
     nombre_livreur = fields.Int(required=True, validate=validate.Range(min=1))
     nombre_caissier = fields.Int(required=False, validate=validate.Range(min=0))
-    # information sur l'admin
-    admin = fields.Dict(required=True, keys=fields.String(), values=fields.String())
 
 
 class MagasinUpdateSchema(StoreProfileSchema):

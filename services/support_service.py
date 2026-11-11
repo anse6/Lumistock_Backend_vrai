@@ -91,6 +91,15 @@ def serialiser_message(m):
     }
 
 
+def _email_admin(admin_id):
+    """E-mail de l'administrateur de la conversation (None si introuvable).
+    Celui du personnel Lumistock n'est jamais envoyé aux magasins."""
+    if not admin_id or not ObjectId.is_valid(str(admin_id)):
+        return None
+    admin = db.tables.users.find_one({"_id": ObjectId(str(admin_id))})
+    return (admin or {}).get("email") or None
+
+
 def serialiser(conv, cote, messages=None):
     donnees = {
         "id": str(conv["_id"]),
@@ -99,6 +108,8 @@ def serialiser(conv, cote, messages=None):
         "initie_par": conv.get("initie_par"),
         "admin_id": conv.get("admin_id"),
         "admin_nom": conv.get("admin_nom"),
+        # Pour la fiche au survol de l'avatar (comme la liste des utilisateurs).
+        "admin_email": _email_admin(conv.get("admin_id")),
         "magasin_id": str(conv.get("magasin_id")) if conv.get("magasin_id") else None,
         "magasin_nom": conv.get("magasin_nom"),
         "staff_nom": conv.get("staff_nom"),

@@ -8,11 +8,11 @@ from datetime import datetime
 def export_produits_to_excel(produits):
     wb = Workbook()
     ws = wb.active
-    ws.title = "Produits"
+    ws.title = "Articles"
 
     # En-têtes
     headers = [
-        "Nom", "Description", "Prix", "Prix d'achat", "Unité", "Quantité",
+        "Nom", "Description", "Prix", "Coût d'achat", "Unité", "Quantité",
         "État", "Catégorie", "Image", "Date de création"
     ]
     ws.append(headers)

@@ -152,7 +152,7 @@ def test_droits(client, magasin):
                    headers=_h(magasin, "admin"))
     assert r.status_code == 200, r.get_json()
     r = _solder(client, magasin, pid, 1, 150, role="manager")
-    assert r.status_code == 403 and "Solder les produits avariés" in r.get_json()["message"]
+    assert r.status_code == 403 and "Solder les articles avariés" in r.get_json()["message"]
 
 
 def test_produit_d_un_autre_magasin(client, app, magasin):

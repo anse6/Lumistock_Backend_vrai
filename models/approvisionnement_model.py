@@ -11,7 +11,7 @@ Lorsqu’un admin ou manager approvisionne un livreur, un document est enregistr
 
     le livreur_id
 
-    la liste des produits avec leurs quantités
+    la liste des articles avec leurs quantités
 
 Ce modèle permet aussi de retrouver tous les approvisionnements d’un livreur, ou un approvisionnement en particulier.
 """

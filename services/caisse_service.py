@@ -297,7 +297,7 @@ def catalogue(magasin_id):
             noms[cat_id] = (cat or {}).get("nom") or "Sans catégorie"
         produit = {
             "id": str(p["_id"]),
-            "nom": p.get("nom") or "Produit",
+            "nom": p.get("nom") or "Article",
             "prix": _num(p.get("prix")),
             "stock": _num(p.get("quantite")),
             "unite": p.get("unite") or "",
@@ -465,13 +465,15 @@ def serialiser_vente(vente, noms=None):
     lignes = []
     for l in vente.get("produits") or []:
         quantite, prix = _num(l.get("quantite")), _num(l.get("prix"))
-        ligne = {"produit_id": str(l.get("produit_id")), "nom": l.get("nom") or "Produit", "quantite": _arrondi(quantite),
+        ligne = {"produit_id": str(l.get("produit_id")), "nom": l.get("nom") or "Article", "quantite": _arrondi(quantite),
                  "prix_unitaire": _arrondi(prix), "total": _arrondi(quantite * prix)}
         if l.get("is_conditionne") and _num(l.get("facteur")) > 0:
             facteur = int(_num(l.get("facteur")))
             cond = ProduitModel.get_conditionnement_by_id(str(l.get("produit_id")), l.get("conditionnement_id"))
-            ligne.update({"conditionnement": (cond or {}).get("nom") or "Lot", "facteur": facteur,
+            ligne.update({"conditionnement": l.get("conditionnement_nom") or (cond or {}).get("nom") or "Lot", "facteur": facteur,
                           "quantite_conditionnement": _arrondi(quantite / facteur), "prix_conditionnement": _arrondi(prix * facteur)})
+        if l.get("numeros_serie"):
+            ligne["numeros_serie"] = list(l["numeros_serie"])
         lignes.append(ligne)
     limite = limite_annulation(vente)
     total, paye = _num(vente.get("montant_total")), _num(vente.get("montant_paye"))
@@ -640,7 +642,7 @@ def statistiques(caissier, periode="jour", debut=None, fin=None):
         serie[cle]["ventes"] += 1
         for l in v.get("produits") or []:
             p = produits[str(l.get("produit_id"))]
-            p["nom"] = l.get("nom") or p["nom"] or "Produit"
+            p["nom"] = l.get("nom") or p["nom"] or "Article"
             p["quantite"] += _num(l.get("quantite"))
             p["chiffre_affaires"] += _num(l.get("quantite")) * _num(l.get("prix"))
     if par_heure:

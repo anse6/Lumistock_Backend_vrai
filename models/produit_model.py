@@ -45,33 +45,15 @@ class ProduitModel:
         
         #  Vérifier si un produit avec le même nom existe déjà dans ce magasin
         if ProduitModel.nom_existe(data["magasin_id"], data["nom"]):
-            raise ValueError("Ce produit existe déjà dans ce magasin")
+            raise ValueError("Cet article existe déjà dans ce magasin")
 
         prix_unitaire = float(data["prix"])
         
-        # Traitemnt des conditionnements si existant
-        conditionnement_nettoyes = []
-        for c in data.get("conditionnements", []):
-            try:
-                nom = c["nom"]
-                facteur = int(c["facteur"])
-            except (KeyError, ValueError):
-                continue 
-            
-            prix_reference = facteur * prix_unitaire
-            prix_conditionnement = float(c["prix_conditionnement"]) if c.get("prix_conditionnement") else prix_reference    
-            economie = prix_conditionnement - prix_reference    
-            
-            conditionnement_nettoyes.append({
-                "_id": ObjectId(),
-                "nom": nom,
-                "facteur": facteur,
-                "prix_conditionnement": prix_conditionnement,
-                "prix_reference": prix_reference,
-                "economie": economie
-            })
-            
-        
+        # Conditionnements : vérifiés (nom, facteur ≥ 2, prix > 0, pas sous le coût).
+        from services.conditionnements import normaliser
+        conditionnement_nettoyes = normaliser(data.get("conditionnements") or [], prix_unitaire,
+                                              float(data.get("prix_achat", 0) or 0))
+
         def safe_oid(val):
             if val and val not in ["undefined", "null", ""] and ObjectId.is_valid(val):
                 return ObjectId(val)
@@ -88,6 +70,7 @@ class ProduitModel:
             "prix": float(data["prix"]),
             # Le frontend historique n'envoie pas toujours ce champ.
             "prix_achat": float(data.get("prix_achat", 0) or 0),
+            "dernier_prix_achat": float(data.get("prix_achat", 0) or 0),
             "unite": data["unite"],  # e.g., "kg", "litre"
             "quantite": quantite,
             "quantite_initiale": quantite,  # pour traçabilité/statistique
@@ -234,61 +217,17 @@ class ProduitModel:
         if "fournisseur_id" in update_data:
             update_data["fournisseur_id"] = safe_oid(update_data["fournisseur_id"])
 
-        # Conditionnements
+        # Conditionnements : vérifiés comme à la création ; un conditionnement
+        # existant garde son identifiant (les ventes y font référence) et son code-barre.
+        from services.conditionnements import normaliser, recalculer_references
+        produit_actuel = ProduitModel.get_by_id(produit_id) or {}
+        prix_unitaire = float(update_data.get("prix", produit_actuel.get("prix", 0)) or 0)
         if "conditionnements" in data:
-            try:
-                produit_actuel = ProduitModel.get_by_id(produit_id)
-                anciens_conditionnements = produit_actuel.get("conditionnements", [])
-
-                # Normaliser les anciens conditionnements : leur attribuer un _id s'il manque
-                for cond in anciens_conditionnements:
-                    if "_id" not in cond:
-                        cond["_id"] = ObjectId()
-
-                ancien_map = {str(cond["_id"]): cond for cond in anciens_conditionnements}
-                prix_unitaire = float(data.get("prix", produit_actuel["prix"]))
-                nouveaux_conditionnements = []
-                ids_recus = set()
-
-                for cond in data["conditionnements"]:
-                    nom = cond["nom"]
-                    facteur = int(cond["facteur"])
-                    prix_reference = facteur * prix_unitaire
-                    prix_conditionnement = float(cond.get("prix_conditionnement", prix_reference))
-                    economie = prix_conditionnement - prix_reference
-
-                    if "_id" in cond:
-                        id_str = str(cond["_id"])
-                        ids_recus.add(id_str)
-                        nouveaux_conditionnements.append({
-                            "_id": ObjectId(id_str),
-                            "nom": nom,
-                            "facteur": facteur,
-                            "prix_conditionnement": prix_conditionnement,
-                            "prix_reference": prix_reference,
-                            "economie": economie,
-                            # Le code-barre du carton se gère à part : on le garde.
-                            "code_barre": (ancien_map.get(id_str) or {}).get("code_barre"),
-                        })
-                    else:
-                        new_id = ObjectId()
-                        nouveaux_conditionnements.append({
-                            "_id": new_id,
-                            "nom": nom,
-                            "facteur": facteur,
-                            "prix_conditionnement": prix_conditionnement,
-                            "prix_reference": prix_reference,
-                            "economie": economie
-                        })
-
-                # Supprimer les anciens conditionnements qui n'ont pas été renvoyés par le frontend
-                # Cela évite les doublons
-                update_data["conditionnements"] = [
-                    cond for cond in nouveaux_conditionnements
-                ]
-
-            except Exception as e:
-                print("Erreur lors de la mise à jour des conditionnements :", e)
+            update_data["conditionnements"] = normaliser(
+                data["conditionnements"], prix_unitaire, float(produit_actuel.get("prix_achat", 0) or 0),
+                anciens=produit_actuel.get("conditionnements"))
+        elif "prix" in update_data and produit_actuel.get("conditionnements"):
+            update_data["conditionnements"] = recalculer_references(produit_actuel["conditionnements"], prix_unitaire)
 
         # Mise à jour MongoDB
         return ProduitModel.get_collection().find_one_and_update(
@@ -360,7 +299,7 @@ class ProduitModel:
             if resultat is None:
                 ProduitModel.liberer_stock(dict(reserves))
                 produit = collection.find_one({"_id": ObjectId(produit_id)}, {"nom": 1})
-                return (produit or {}).get("nom") or "Produit"
+                return (produit or {}).get("nom") or "Article"
             reserves.append((produit_id, quantite))
         for produit_id, _ in reserves:
             ProduitModel._maj_etat(produit_id)
@@ -486,7 +425,8 @@ class ProduitModel:
             "nom": row["nom"],
             "description": row.get("description", ""),
             "prix": row["prix"],
-            "prix_achat": row.get("prix_achat", 0), # Nouveau champ
+            "prix_achat": row.get("prix_achat", 0),
+            "dernier_prix_achat": row.get("prix_achat", 0),
             "unite": row["unite"],
             "quantite": row["quantite"],
             "quantite_initiale": row["quantite"],

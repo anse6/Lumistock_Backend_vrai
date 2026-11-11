@@ -719,7 +719,7 @@ def route_produits_total_manager():
         result = get_nombre_produits_livres()
         return jsonify(result), 200
     except Exception as e:
-        return jsonify({"message": "Erreur lors de la récupération du nombre de produits", "error": str(e)}), 500
+        return jsonify({"message": "Erreur lors de la récupération du nombre d'articles", "error": str(e)}), 500
     
     
     

@@ -109,9 +109,14 @@ class LivraisonModel:
             if data.get("action_manager") == True:
                 ristourne = montant_total - montant_paye
                 have_ristourne = True
-                statut_paiement = "partiellement payé" 
+                statut_paiement = "partiellement payé"
             else:
                 statut_paiement = "partiellement payé"
+        elif montant_paye <= 0 and montant_total > 0:
+            # « payé » demandé sans rien encaisser : la vente était enregistrée
+            # comme réglée alors qu'aucun argent n'était reçu.
+            raise VenteRefusee("Aucun montant encaissé : indiquez la somme reçue, ou choisissez "
+                               "« non payé » pour une vente à crédit.")
         else:
             statut_paiement = "payé"
             montant_paye = montant_total
@@ -124,6 +129,12 @@ class LivraisonModel:
         # les encaissements (caisse, rapports) le comptent.
         if len(paiements) == 1 and paiements[0].get("montant") in (None, "") and statut_paiement == "payé":
             paiements = [{**paiements[0], "montant": montant_total}]
+        # Argent reçu sans détail des paiements (seulement « montant_paye », ou
+        # rien du tout = payé comptant) : il est inscrit comme un paiement, sinon
+        # les encaissements (caisse, rapports) ne le comptaient pas.
+        elif not paiements and montant_paye_manuel > 0:
+            paiements = [{"methode": data.get("methode_paiement") or "cash",
+                          "montant": round(min(montant_paye_manuel, montant_total), 2)}]
 
         # L'argent inscrit doit être celui gardé : la monnaie rendue n'est pas un
         # encaissement. Un trop-perçu serait compté dans les encaissements

@@ -45,7 +45,7 @@ def _verifier_contenu(data):
         if not isinstance(produit, dict):
             continue
         if not ProduitModel.get_for_magasin(produit.get("produit_id"), magasin_id):
-            return jsonify({"error": f"Produit {produit.get('produit_id')} introuvable dans votre magasin."}), 400
+            return jsonify({"error": f"Article {produit.get('produit_id')} introuvable dans votre magasin."}), 400
     return None
 
 

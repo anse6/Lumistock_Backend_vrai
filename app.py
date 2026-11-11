@@ -45,6 +45,8 @@ ROUTES_CAISSIER = (
     # Écran de vente partagé avec l'admin : choisir ou créer le client (les
     # autres routes /clients/ refusent le rôle caissier).
     "/clients/",
+    # Choix des unités vendues d'un article suivi par numéro de série (sans coût).
+    "/numeros-serie/disponibles/",
 )
 
 
@@ -126,6 +128,7 @@ def create_app(config=None):
     from routes.contact_routes import contact_bp
     from routes.assistant_routes import assistant_bp
     from routes.support_routes import support_bp
+    from routes.numeros_serie_routes import numeros_serie_bp
     
     
     app.register_blueprint(user_bp)
@@ -157,6 +160,7 @@ def create_app(config=None):
     app.register_blueprint(contact_bp)
     app.register_blueprint(assistant_bp)
     app.register_blueprint(support_bp)
+    app.register_blueprint(numeros_serie_bp)
 
     # Un caissier n'accède qu'à sa caisse : liste blanche de routes, vérifiée
     # avant toute autre chose. Même une route qui n'aurait qu'un @jwt_required
@@ -235,6 +239,21 @@ def create_app(config=None):
     @app.errorhandler(HTTPException)
     def handle_http_exception(error):
         return jsonify({"error": error.description or str(error)}), error.code
+
+    # Deux opérations simultanées se sont bloquées (deadlock) ou un verrou a
+    # trop attendu : MySQL a annulé l'opération, rien n'est enregistré. Le
+    # client peut simplement réessayer.
+    from sqlalchemy.exc import OperationalError
+
+    @app.errorhandler(OperationalError)
+    def handle_operational_error(error):
+        code = getattr(getattr(error, "orig", None), "args", [None])[0]
+        if code in (1205, 1213):  # lock wait timeout, deadlock
+            app.logger.warning("Conflit de verrou MySQL (%s) sur %s", code, (getattr(error, "statement", None) or "")[:120])
+            return jsonify({"error": "Une autre opération était en cours sur les mêmes données. "
+                                     "Rien n'a été enregistré : veuillez réessayer."}), 503
+        app.logger.exception("Erreur de base de données")
+        return jsonify({"error": "La base de données est momentanément indisponible. Réessayez."}), 503
 
     # Gestion des erreurs MongoDB InvalidId
     @app.errorhandler(InvalidId)

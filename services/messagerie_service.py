@@ -53,7 +53,7 @@ VARIABLES = {
     "dette": "Reste à payer (ex. 15 000 FCFA)",
     "total_achats": "Montant total des achats non soldés",
     "deja_paye": "Montant déjà réglé sur ces achats",
-    "detail_achats": "Détail de chaque achat non soldé : date, produits, total, payé, reste (pour l'email)",
+    "detail_achats": "Détail de chaque achat non soldé : date, articles, total, payé, reste (pour l'email)",
     "detail_achats_court": "Résumé des achats non soldés, ex. « votre achat du 14/10/2026 (Riz x2) » (pour le SMS)",
     "detail_paiement": "Phrase complète : total, montant déjà réglé et reste à payer",
     "avance": "Solde versé sur le compte du client",
@@ -285,7 +285,7 @@ def _achat(vente, total, paye):
     """Résumé d'une vente non soldée : date, produits, total, payé, reste."""
     produits = {}
     for ligne in vente.get("produits") or []:
-        nom = (ligne.get("nom") or "Produit").strip()
+        nom = (ligne.get("nom") or "Article").strip()
         produits[nom] = produits.get(nom, 0) + int(float(ligne.get("quantite", 0) or 0))
     return {
         "date": _date_locale(vente.get("date_commande") or vente.get("created_at")),

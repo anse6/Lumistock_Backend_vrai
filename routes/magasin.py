@@ -94,13 +94,24 @@ def create():
         required: true
         example: 10
       - in: formData
-        name: admin
+        name: admin_name
+        type: string
+        required: true
+        example: Nguefack
+      - in: formData
+        name: admin_first_name
+        type: string
+        required: true
+        example: Marius
+      - in: formData
+        name: admin_email
         type: string
         required: true
         description: >
-          Objet JSON contenant les informations de l'admin (name, first_name, email).
-          Aucun mot de passe : l'admin reçoit un lien d'invitation pour choisir le sien.
-        example: '{"name": "Nguefack", "first_name": "Marius", "email": "marius.nguefack@exemple.com"}'
+          Email de l'administrateur. Aucun mot de passe : il reçoit un lien
+          d'invitation pour choisir le sien. Facultatifs : admin_telephone,
+          admin_sexe, admin_date_naissance, admin_fonction.
+        example: marius.nguefack@exemple.com
       - in: formData
         name: image
         type: file
@@ -118,12 +129,18 @@ def create():
         data = request.form.to_dict()
         logo_file = request.files.get("image")
 
-        # Parser admin JSON
+        # Administrateur envoyé à plat (admin_name, admin_email…), comme à
+        # l'inscription publique. L'ancien format (objet JSON « admin ») est
+        # encore accepté et converti.
         if "admin" in data:
             try:
-                data["admin"] = json.loads(data["admin"])
-            except json.JSONDecodeError:
+                ancien = json.loads(data.pop("admin"))
+            except (json.JSONDecodeError, TypeError):
                 return jsonify({"errors": {"admin": ["Format JSON invalide"]}}), 400
+            if not isinstance(ancien, dict):
+                return jsonify({"errors": {"admin": ["Format JSON invalide"]}}), 400
+            for cle, valeur in ancien.items():
+                data.setdefault(f"admin_{cle}", valeur)
 
 
         # Valider les données
@@ -385,10 +402,12 @@ def get_parametres_stock():
         magasin_id = inject_magasin_id({})["magasin_id"]
     except Exception:
         return jsonify({"message": "Aucun magasin n'est associé à cet utilisateur."}), 403
+    from services import numeros_serie_service
     return jsonify({
         "methode": valorisation_service.get_methode(magasin_id),
         "methode_par_defaut": valorisation_service.METHODE_PAR_DEFAUT,
         "methodes": valorisation_service.lister_methodes(),
+        "suivi_numeros_serie": numeros_serie_service.actif(magasin_id),
     }), 200
 
 
@@ -425,15 +444,22 @@ def update_parametres_stock():
         magasin_id = inject_magasin_id({})["magasin_id"]
     except Exception:
         return jsonify({"message": "Aucun magasin n'est associé à cet utilisateur."}), 403
+    from services import numeros_serie_service
     data = request.get_json(silent=True) or {}
+    reponse = {}
     try:
-        methode = valorisation_service.set_methode(magasin_id, data.get("methode"))
+        if "suivi_numeros_serie" in data:
+            actif = numeros_serie_service.definir_actif(magasin_id, data["suivi_numeros_serie"])
+            reponse.update({"suivi_numeros_serie": actif, "message": (
+                "Numéros de série activés : cochez « Suivi par numéro de série » sur les articles concernés."
+                if actif else "Numéros de série désactivés.")})
+        if "methode" in data or not reponse:
+            methode = valorisation_service.set_methode(magasin_id, data.get("methode"))
+            reponse.update({"methode": methode,
+                            "message": f"Méthode de valorisation : {valorisation_service.METHODES[methode]['nom']}."})
     except ValueError as error:
         return jsonify({"message": str(error)}), 400
-    return jsonify({
-        "message": f"Méthode de valorisation : {valorisation_service.METHODES[methode]['nom']}.",
-        "methode": methode,
-    }), 200
+    return jsonify(reponse), 200
 
 
 # Supprimer un magasin

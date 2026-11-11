@@ -46,7 +46,10 @@ def ensure_mysql_database(url):
     if not re.fullmatch(r"[A-Za-z0-9_]+", parsed.database):
         raise RuntimeError("Nom de base invalide : seuls lettres, chiffres et _ sont autorisés")
 
-    server_url = parsed.set(database=None)
+    # ``URL.set(database=None)`` ne retire PAS le nom de la base (None veut
+    # dire « inchangé » en SQLAlchemy 2) : la connexion visait alors la base
+    # à créer et échouait (« Unknown database »).
+    server_url = parsed._replace(database=None)
     engine = create_engine(server_url, **_engine_options(server_url))
     try:
         quoted_name = engine.dialect.identifier_preparer.quote(parsed.database)
@@ -91,6 +94,14 @@ def migrate(config, create_database=True):
                 for column in missing_columns:
                     column_ddl = str(CreateColumn(column).compile(dialect=engine.dialect))
                     connection.execute(text(f"ALTER TABLE {quoted_table} ADD COLUMN {column_ddl}"))
+
+            # Index déclarés après la création de la table (create_all ne les
+            # ajoute pas sur une table existante).
+            for table_name, table in tables.items():
+                existing_indexes = {index["name"] for index in inspector.get_indexes(table_name)}
+                for index in table.indexes:
+                    if index.name not in existing_indexes:
+                        index.create(connection)
 
             already_applied = connection.execute(
                 select(migrations.c.version).where(migrations.c.version == MIGRATION_VERSION)

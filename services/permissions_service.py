@@ -19,7 +19,7 @@ ROLES_CONFIGURABLES = ("manager", "gerant", "caissier")
 LIBELLES_ROLES = {"manager": "Manager", "gerant": "Gérant", "caissier": "Caissier"}
 
 GROUPES = {
-    "produits": "Produits et stock",
+    "produits": "Articles et stock",
     "clients": "Clients",
     "ventes": "Ventes et caisse",
     "finances": "Finances",
@@ -28,19 +28,19 @@ GROUPES = {
 
 # cle: (groupe, libellé, description, rôles par défaut, rôles configurables)
 _CATALOGUE = [
-    ("produits.creer", "produits", "Créer des produits",
-     "Ajouter un nouveau produit au catalogue.", ("admin",), ("manager",)),
-    ("produits.importer", "produits", "Importer des produits",
-     "Créer ou mettre à jour des produits depuis un fichier Excel.", ("admin", "manager"), ("manager",)),
-    ("produits.modifier", "produits", "Modifier les produits",
-     "Changer le nom, le prix, la catégorie… d'un produit.", ("admin", "manager"), ("manager",)),
-    ("produits.supprimer", "produits", "Supprimer et restaurer des produits",
-     "Mettre un produit à la corbeille, le restaurer ou le supprimer définitivement.", ("admin",), ("manager",)),
+    ("produits.creer", "produits", "Créer des articles",
+     "Ajouter un nouvel article au catalogue.", ("admin",), ("manager",)),
+    ("produits.importer", "produits", "Importer des articles",
+     "Créer ou mettre à jour des articles depuis un fichier Excel.", ("admin", "manager"), ("manager",)),
+    ("produits.modifier", "produits", "Modifier les articles",
+     "Changer le nom, le prix, la catégorie… d'un article.", ("admin", "manager"), ("manager",)),
+    ("produits.supprimer", "produits", "Supprimer et restaurer des articles",
+     "Mettre un article à la corbeille, le restaurer ou le supprimer définitivement.", ("admin",), ("manager",)),
     ("stock.approvisionner", "produits", "Approvisionner le stock",
      "Enregistrer, modifier ou supprimer des approvisionnements.", ("admin", "manager"), ("manager",)),
     ("stock.avaries", "produits", "Déclarer des avaries et périmés",
-     "Sortir du stock des produits abîmés ou périmés.", ("admin", "manager"), ("manager",)),
-    ("stock.soldes", "produits", "Solder les produits avariés",
+     "Sortir du stock des articles abîmés ou périmés.", ("admin", "manager"), ("manager",)),
+    ("stock.soldes", "produits", "Solder les articles avariés",
      "Remettre en vente à prix réduit des unités déclarées en avarie.", ("admin", "manager"), ("manager",)),
 
     ("clients.supprimer", "clients", "Supprimer et restaurer des clients",
@@ -52,10 +52,10 @@ _CATALOGUE = [
      "une première fois.", ("admin", "manager"), ("manager", "gerant")),
 
     ("ventes.modifier", "ventes", "Modifier une vente",
-     "Changer les produits, quantités ou paiements d'une vente déjà enregistrée.",
+     "Changer les articles, quantités ou paiements d'une vente déjà enregistrée.",
      ("admin", "manager", "gerant"), ("manager", "gerant")),
     ("ventes.annuler", "ventes", "Annuler une vente",
-     "Annuler une vente et remettre ses produits en stock. À la caisse, seulement dans les minutes qui "
+     "Annuler une vente et remettre ses articles en stock. À la caisse, seulement dans les minutes qui "
      "suivent la vente.", ("admin", "manager", "gerant", "caissier"), ("manager", "gerant", "caissier")),
     ("ventes.abandon_reste", "ventes", "Abandonner le reste impayé",
      "Solder une vente sans le reste dû, sans validation. Sans ce droit, le gérant envoie une demande "

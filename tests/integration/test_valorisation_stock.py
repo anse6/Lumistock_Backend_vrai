@@ -170,3 +170,94 @@ def test_produit_existant_sans_lots_est_initialise(client, app, magasin):
     etat = _valorisation(client, magasin, produit_id)
     assert etat["quantite_valorisee"] == pytest.approx(4)
     assert etat["valeur_stock"] == pytest.approx(320)
+
+
+# --------------------------------------------------------------------------
+# Coût d'achat de l'article (comme le champ « Coût » d'Odoo)
+# --------------------------------------------------------------------------
+def _article(client, m, produit_id):
+    with client.application.app_context():
+        return db.tables.produits.find_one({"_id": ObjectId(produit_id)})
+
+
+def _creer_et_reapprovisionner(client, m):
+    """10 unités achetées à 100, puis 30 à 200."""
+    admin = _h(m, "admin")
+    r = client.post("/produits", data={"nom": "Sucre", "prix": "300", "prix_achat": "100", "quantite": "10",
+                                       "unite": "kg"}, headers=admin, content_type="multipart/form-data")
+    assert r.status_code == 201, r.get_json()
+    produit_id = r.get_json()["produit_id"]
+    r = client.post(f"/produits/{produit_id}/approvisionner", json={"quantite": 30, "prix_achat": 200}, headers=admin)
+    assert r.status_code == 200, r.get_json()
+    return produit_id
+
+
+def _vendre_au_magasin(client, m, produit_id, quantite):
+    r = client.post("/admin_or_manager/livraisons", json={"produits": [{"produit_id": produit_id, "quantite": quantite}],
+                                                  "statut_paiement": "payé", "montant_paye": 300 * quantite},
+                    headers=_h(m, "admin"))
+    assert r.status_code in (200, 201), r.get_json()
+
+
+def test_cmup_le_cout_devient_la_moyenne_ponderee(client, magasin):
+    produit_id = _creer_et_reapprovisionner(client, magasin)
+    article = _article(client, magasin, produit_id)
+    # (10 × 100 + 30 × 200) / 40 = 175, et non le dernier prix (200).
+    assert article["prix_achat"] == pytest.approx(175)
+    assert article["dernier_prix_achat"] == pytest.approx(200)
+    _vendre_au_magasin(client, magasin, produit_id, 20)
+    # Une sortie ne change pas le coût moyen.
+    assert _article(client, magasin, produit_id)["prix_achat"] == pytest.approx(175)
+
+
+def test_fifo_le_cout_suit_les_lots_restants(client, magasin):
+    _choisir(client, magasin, "FIFO")
+    produit_id = _creer_et_reapprovisionner(client, magasin)
+    assert _article(client, magasin, produit_id)["prix_achat"] == pytest.approx(175)
+    _vendre_au_magasin(client, magasin, produit_id, 20)
+    # Les 10 à 100 et 10 des 200 sont partis : il reste 20 unités à 200.
+    article = _article(client, magasin, produit_id)
+    assert article["prix_achat"] == pytest.approx(200)
+    assert article["quantite"] * article["prix_achat"] == pytest.approx(4000)
+
+
+def test_lifo_le_cout_suit_les_lots_restants(client, magasin):
+    _choisir(client, magasin, "LIFO")
+    produit_id = _creer_et_reapprovisionner(client, magasin)
+    _vendre_au_magasin(client, magasin, produit_id, 20)
+    # 20 des 30 à 200 sont partis : il reste 10 à 100 et 10 à 200 → 150.
+    article = _article(client, magasin, produit_id)
+    assert article["prix_achat"] == pytest.approx(150)
+    assert article["quantite"] * article["prix_achat"] == pytest.approx(3000)
+
+
+def test_reapprovisionnement_sans_prix_reprend_le_dernier_prix_paye(client, magasin):
+    produit_id = _creer_et_reapprovisionner(client, magasin)
+    r = client.post(f"/produits/{produit_id}/approvisionner", json={"quantite": 10}, headers=_h(magasin, "admin"))
+    assert r.status_code == 200
+    # Nouveau lot à 200 (dernier prix payé), pas à 175 : (7000 + 2000) / 50 = 180.
+    assert _article(client, magasin, produit_id)["prix_achat"] == pytest.approx(180)
+
+
+def test_le_cout_ne_se_modifie_plus_a_la_main_apres_un_achat(client, magasin):
+    admin = _h(magasin, "admin")
+    r = client.post("/produits", data={"nom": "Huile", "prix": "300", "prix_achat": "100", "quantite": "5",
+                                       "unite": "l"}, headers=admin, content_type="multipart/form-data")
+    produit_id = r.get_json()["produit_id"]
+    # Correction d'une erreur de saisie : un seul lot, accepté.
+    r = client.put(f"/produits/{produit_id}", data={"prix_achat": "120"}, headers=admin,
+                   content_type="multipart/form-data")
+    assert r.status_code == 200, r.get_json()
+    assert _article(client, magasin, produit_id)["prix_achat"] == pytest.approx(120)
+    assert _valorisation(client, magasin, produit_id)["valeur_stock"] == pytest.approx(600)
+    # Après un réapprovisionnement, le coût est calculé : refus.
+    client.post(f"/produits/{produit_id}/approvisionner", json={"quantite": 5, "prix_achat": 200}, headers=admin)
+    r = client.put(f"/produits/{produit_id}", data={"prix_achat": "50"}, headers=admin,
+                   content_type="multipart/form-data")
+    assert r.status_code == 400
+    # Renvoyer le même coût avec les autres champs reste possible.
+    cout = _article(client, magasin, produit_id)["prix_achat"]
+    assert cout == pytest.approx(160)
+    r = client.put(f"/produits/{produit_id}", data={"prix_achat": str(cout), "nom": "Huile 1L"}, headers=admin,
+                   content_type="multipart/form-data")
+    assert r.status_code == 200, r.get_json()

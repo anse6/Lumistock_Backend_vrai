@@ -28,7 +28,9 @@ class RetourLivraisonModel:
             "montant_tva": data.get("montant_tva"),
             "cout_retour": data.get("cout_retour"),
             "retenue_pourcentage": data.get("retenue_pourcentage", 0.0),
-            "frais_retour": data.get("frais_retour", 0.0),
+            "frais_retour": data.get("frais_retour", 0.0),  # TTC : ce que le client garde à payer
+            "frais_retour_ht": data.get("frais_retour_ht", data.get("frais_retour", 0.0)),
+            "frais_retour_tva": data.get("frais_retour_tva", 0.0),
             "motif": data.get("motif", ""),
             "magasin_id": ObjectId(magasin_id) if magasin_id else None,
             "manager_id": ObjectId(data["manager_id"]) if data.get("manager_id") else None,

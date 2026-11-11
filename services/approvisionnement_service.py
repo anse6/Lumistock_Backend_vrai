@@ -9,6 +9,17 @@ from models.user_model import UserModel
 from bson import ObjectId
 
 
+def _refus_articles_suivis(produits):
+    """Les gérants ne reçoivent pas encore d'articles suivis par numéro de série."""
+    from services import numeros_serie_service
+    for p in produits:
+        produit = ProduitModel.get_by_id(str(p.get("produit_id")))
+        if numeros_serie_service.est_suivi(produit):
+            return {"error": f"« {produit.get('nom')} » est suivi par numéro de série : la remise à un gérant "
+                             "n'est pas encore possible pour ces articles."}, 400
+    return None
+
+
 def approvisionner_livreur(data):
     try:
         validated_data = ApprovisionnementSchema().load(data)
@@ -22,6 +33,9 @@ def approvisionner_livreur(data):
     is_valid, error = verifier_produits_approvisionnement_valide(produits)
     if not is_valid:
         return {"error": error}, 400
+    erreur_serie = _refus_articles_suivis(produits)
+    if erreur_serie:
+        return erreur_serie
 
     # 1. Enregistrer l'approvisionnement
     appro_id = ApprovisionnementModel.enregistrer_approvisionnement(validated_data)
@@ -207,13 +221,13 @@ def delete_approvisionnement_service(approvisionnement_id):
                 quantite_appro = produit.get("quantite")
 
                 if not produit_id or quantite_appro is None:
-                    print(f"⛔ Produit mal structuré : {produit}")
+                    print(f"⛔ Article mal structuré : {produit}")
                     continue
 
                 produit_id_obj = ObjectId(produit_id)
 
                 if not ProduitModel.get_by_id(str(produit_id_obj)):
-                    print(f"⛔ Produit {produit_id} introuvable dans la base principale")
+                    print(f"⛔ Article {produit_id} introuvable dans la base principale")
                     continue
 
                 # Vérifier stock réel chez le livreur
@@ -225,7 +239,7 @@ def delete_approvisionnement_service(approvisionnement_id):
                 quantite_en_stock = stock_livreur["quantite"] if stock_livreur else 0
 
                 if quantite_en_stock <= 0:
-                    print(f"⚠️ Aucune quantité disponible à rapatrier pour produit {produit_id}")
+                    print(f"⚠️ Aucune quantité disponible à rapatrier pour article {produit_id}")
                     continue
 
                 # Calcul de la quantité à récupérer
@@ -255,7 +269,7 @@ def delete_approvisionnement_service(approvisionnement_id):
                 )
 
             except Exception as e:
-                print(f"⛔ Erreur inattendue pour produit {produit.get('produit_id')} : {e}")
+                print(f"⛔ Erreur inattendue pour article {produit.get('produit_id')} : {e}")
                 continue
 
         # Supprimer l'approvisionnement même partiellement traité (soft delete)
@@ -307,6 +321,9 @@ def update_approvisionnement_service(approvisionnement_id, data):
             return {"message": "Approvisionnement introuvable"}, 404
             
         validated_data = ApprovisionnementSchema().load(data)
+        erreur_serie = _refus_articles_suivis(validated_data["produits"])
+        if erreur_serie:
+            return erreur_serie
         
         anciens_produits_list = approvisionnement.get("produits", [])
         anciens_produits = {str(p["produit_id"]): p["quantite"] for p in anciens_produits_list}
@@ -324,7 +341,7 @@ def update_approvisionnement_service(approvisionnement_id, data):
             for p_id, anc_q in anciens_produits.items():
                 stock_anc_livreur = StockLivreurModel.get_produit_quantite(old_livreur_id, p_id)
                 if stock_anc_livreur < anc_q:
-                    return {"error": f"Impossible de changer de livreur car l'ancien livreur a déjà écoulé une partie du stock. (Produit {p_id} : reste {stock_anc_livreur}, besoin de retirer {anc_q})"}, 400
+                    return {"error": f"Impossible de changer de livreur car l'ancien livreur a déjà écoulé une partie du stock. (Article {p_id} : reste {stock_anc_livreur}, besoin de retirer {anc_q})"}, 400
             
             # Transfert du stock de l'ancien vers le nouveau
             for p_id, anc_q in anciens_produits.items():
@@ -344,16 +361,16 @@ def update_approvisionnement_service(approvisionnement_id, data):
             
             produit_obj = ProduitModel.get_by_id(p_id)
             if not produit_obj:
-                return {"error": f"Produit {p_id} introuvable"}, 400
+                return {"error": f"Article {p_id} introuvable"}, 400
                 
             if magasin_reference is None:
                 magasin_reference = str(produit_obj["magasin_id"])
             elif str(produit_obj["magasin_id"]) != magasin_reference:
-                return {"error": f"Tous les produits doivent appartenir au même magasin."}, 400
+                return {"error": f"Tous les articles doivent appartenir au même magasin."}, 400
                 
             if delta > 0:
                 if produit_obj["quantite"] < delta:
-                    return {"error": f"Stock insuffisant pour le produit '{produit_obj.get('nom', 'Inconnu')}' (disponible: {produit_obj['quantite']}, besoin supplémentaire: {delta})"}, 400
+                    return {"error": f"Stock insuffisant pour l'article '{produit_obj.get('nom', 'Inconnu')}' (disponible: {produit_obj['quantite']}, besoin supplémentaire: {delta})"}, 400
                     
             if delta < 0:
                 retrait = abs(delta)
@@ -366,7 +383,7 @@ def update_approvisionnement_service(approvisionnement_id, data):
             if p_id not in nouveaux_produits:
                 stock_livreur_actuel = StockLivreurModel.get_produit_quantite(livreur_id, p_id)
                 if stock_livreur_actuel < anc_q:
-                     return {"error": f"Impossible de retirer le produit car le livreur a déjà écoulé ce stock. (Disponible chez livreur: {stock_livreur_actuel}, à retirer: {anc_q})"}, 400
+                     return {"error": f"Impossible de retirer l'article car le livreur a déjà écoulé ce stock. (Disponible chez livreur: {stock_livreur_actuel}, à retirer: {anc_q})"}, 400
         
         # Execution des modifications
         # ... (le reste du code utilise 'livreur_id' qui pointe maintenant vers le bon livreur)
@@ -537,4 +554,4 @@ def supprimer_definitivement_approvisionnement_service(approvisionnement_id):
     except Exception as e:
         return {"message": f"Erreur lors de la suppression définitive : {str(e)}"}, 500
 
-
+

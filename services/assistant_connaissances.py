@@ -16,10 +16,10 @@ FICHES = [
         "id": "presentation",
         "titre": "Qu'est-ce que Lumistock ?",
         "mots": "lumistock logiciel presentation quoi c'est application gestion commerciale",
-        "texte": "Lumistock est un logiciel de gestion commerciale en ligne pour les commerces d'Afrique centrale : "
+        "texte": "Lumistock est un logiciel de gestion commerciale pour les commerces du monde entier : "
                  "ventes, caisse, stock, crédit client, messagerie SMS/email, comptabilité SYSCOHADA, rapports et "
-                 "assistant IA. Il fonctionne dans le navigateur (ordinateur, tablette, téléphone), sans installation, "
-                 "en français et en anglais. Il convient aux boutiques, quincailleries, supermarchés, grossistes, "
+                 "assistant IA. Il s'utilise sur ordinateur, tablette et téléphone, en français, anglais, espagnol, "
+                 "allemand, chinois et arabe. Il convient aux boutiques, quincailleries, supermarchés, grossistes, "
                  "dépôts de boissons, pharmacies, cosmétiques, librairies, matériaux de construction, pièces détachées.",
     },
     {
@@ -47,7 +47,7 @@ FICHES = [
         "texte": "Trois étapes : 1) inscrire le magasin sur la page « Créer mon magasin » (nom, activité, email, "
                  "téléphone, pays, ville, quartier, puis l'administrateur, puis facultativement les informations "
                  "légales et le logo) ; 2) l'équipe Lumistock vérifie et valide la demande, puis l'administrateur "
-                 "reçoit un email avec un lien pour choisir son mot de passe ; 3) ajouter ou importer ses produits, "
+                 "reçoit un email avec un lien pour choisir son mot de passe ; 3) ajouter ou importer ses articles, "
                  "inviter son équipe, ouvrir la caisse. Aucun délai de validation précis n'est garanti.",
     },
     {
@@ -61,8 +61,9 @@ FICHES = [
         "id": "appareils",
         "titre": "Appareils et langues",
         "mots": "telephone tablette ordinateur installer navigateur mobile android application langue anglais francais",
-        "texte": "Lumistock s'utilise dans un navigateur web sur ordinateur, tablette ou téléphone : rien à installer. "
-                 "Chaque utilisateur choisit le français ou l'anglais à tout moment.",
+        "texte": "Lumistock s'utilise sur ordinateur, tablette et téléphone, avec le même compte et les mêmes "
+                 "données sur chaque appareil. Chaque utilisateur choisit sa langue à tout moment : français, anglais, "
+                 "espagnol, allemand, chinois ou arabe.",
     },
     {
         "id": "ventes",
@@ -119,17 +120,30 @@ FICHES = [
         "titre": "Stock",
         "mots": "stock inventaire produit article rupture alerte seuil import excel code barre conditionnement carton avarie perime dormant",
         "texte": "Catalogue (nom, image, catégorie, unité, prix de vente et d'achat), conditionnements (pièce, carton, "
-                 "sac…), codes-barres, import et export Excel. Seuil d'alerte par produit, ruptures sur le tableau de "
+                 "sac…), codes-barres, import et export Excel. Seuil d'alerte par article, ruptures sur le tableau de "
                  "bord, stock qui dort (60 jours sans vente). Journal de chaque mouvement (vente, retour, "
                  "approvisionnement, avarie, périmé), inventaire valorisé, rapport de stock annuel, corbeille.",
     },
     {
         "id": "valorisation",
         "titre": "Valorisation du stock",
-        "mots": "cmup fifo lifo valorisation cout moyen marge prix d'achat lots",
+        "mots": "cmup fifo lifo valorisation cout moyen marge prix d'achat cout d'achat lots",
         "texte": "Chaque entrée en stock crée un lot avec son prix d'achat. La méthode, choisie par l'administrateur, "
                  "est CMUP (par défaut), FIFO ou LIFO ; le coût de chaque vente et la marge sont calculés selon "
-                 "cette méthode.",
+                 "cette méthode. Le coût d'achat de l'article est recalculé à chaque entrée ou sortie : moyenne "
+                 "pondérée en CMUP, coût des lots restants en FIFO et LIFO. Exemple : 10 achetés à 100 puis 30 à "
+                 "200 donnent un coût de 175 en CMUP. La fiche article détaille les lots et la valeur du stock.",
+    },
+    {
+        "id": "numeros_serie",
+        "titre": "Numéros de série",
+        "mots": "numero de serie serie machine telephone ordinateur garantie tracabilite unite imei",
+        "texte": "Option à activer dans Paramètres › Stock, pour les articles vendus à l'unité avec un numéro "
+                 "unique (machines, téléphones…). Chaque unité est enregistrée avec son numéro à l'arrivée "
+                 "(création, approvisionnement, facture fournisseur), désignée à la vente au scan ou dans une "
+                 "liste, et suivie aux retours, annulations et avaries. Le numéro figure sur le ticket et la "
+                 "facture. Le rapport « Numéros de série » montre quelle unité est sortie, quand et pour quel "
+                 "client, et l'historique complet de chaque numéro.",
     },
     {
         "id": "achats",
@@ -158,9 +172,10 @@ FICHES = [
     {
         "id": "pays",
         "titre": "Pays et monnaie",
-        "mots": "pays cameroun gabon congo tchad centrafrique guinee equatoriale fcfa franc cfa monnaie devise afrique",
-        "texte": "Pensé pour l'espace OHADA, montants en FCFA sans centimes. Taux de TVA par défaut selon le pays du "
-                 "magasin (Cameroun 19,25 %, Gabon 18 %, Congo 18 %, Tchad 18 %, Centrafrique 19 %, Guinée "
+        "mots": "pays cameroun gabon congo tchad centrafrique guinee equatoriale fcfa franc cfa monnaie devise afrique monde international europe france etranger",
+        "texte": "Utilisable partout dans le monde. La devise est celle du magasin (FCFA sans centimes par défaut) "
+                 "et le taux de TVA par défaut dépend du pays du magasin, pour environ 70 pays d'Afrique, d'Europe, "
+                 "d'Amérique et d'Asie (par exemple Cameroun 19,25 %, Gabon 18 %, Congo 18 %, Tchad 18 %, Centrafrique 19 %, Guinée "
                  "équatoriale 15 %), modifiables. La devise est réglable dans les informations du magasin.",
     },
     {
@@ -184,7 +199,7 @@ FICHES = [
         "titre": "Équipe et droits",
         "mots": "equipe employe role droit acces permission manager caissier admin administrateur inviter desactiver",
         "texte": "Quatre rôles : administrateur (tous les droits), manager, gérant, caissier. Invitation par email avec "
-                 "un lien à usage unique. L'administrateur règle 19 droits par rôle (créer/supprimer des produits, "
+                 "un lien à usage unique. L'administrateur règle 19 droits par rôle (créer/supprimer des articles, "
                  "annuler une vente, voir la comptabilité…). Désactiver un compte coupe l'accès immédiatement.",
     },
     {

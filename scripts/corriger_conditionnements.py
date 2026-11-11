@@ -33,8 +33,8 @@ def corriger_conditionnements_sans_id():
                 count_modifies += 1
             count_total += 1
 
-        print(f" Produits parcourus : {count_total}")
-        print(f" Produits corrigés (ajout d'ID dans conditionnements) : {count_modifies}")
+        print(f" Articles parcourus : {count_total}")
+        print(f" Articles corrigés (ajout d'ID dans conditionnements) : {count_modifies}")
 
 if __name__ == "__main__":
     corriger_conditionnements_sans_id()

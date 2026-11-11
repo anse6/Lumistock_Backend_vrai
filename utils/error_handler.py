@@ -56,23 +56,23 @@ def verifier_produits_approvisionnement_valide(produits: list):
     - Aucun produit ne dépasse le stock disponible.
     """
     if not produits:
-        return False, "Aucun produit fourni"
+        return False, "Aucun article fourni"
 
     magasin_reference = None
 
     for produit in produits:
         produit_obj = ProduitModel.get_by_id(produit["produit_id"])
         if not produit_obj:
-            return False, f"Produit {produit['produit_id']} introuvable"
+            return False, f"Article {produit['produit_id']} introuvable"
 
         # Vérifier stock suffisant
         if produit["quantite"] > produit_obj["quantite"]:
-            return False, f"Stock insuffisant pour le produit '{produit_obj['nom']}' (disponible: {produit_obj['quantite']}, demandé: {produit['quantite']})"
+            return False, f"Stock insuffisant pour l'article '{produit_obj['nom']}' (disponible: {produit_obj['quantite']}, demandé: {produit['quantite']})"
 
         # Vérifier cohérence magasin
         if magasin_reference is None:
             magasin_reference = produit_obj["magasin_id"]
         elif str(produit_obj["magasin_id"]) != str(magasin_reference):
-            return False, f"Tous les produits doivent appartenir au même magasin. Conflit détecté avec le produit '{produit_obj['nom']}'"
+            return False, f"Tous les articles doivent appartenir au même magasin. Conflit détecté avec l'article '{produit_obj['nom']}'"
 
     return True, None

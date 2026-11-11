@@ -162,7 +162,7 @@ def _calculer_faits_magasin(magasin_id, jours):
     for p in db.tables.produits.find({"magasin_id": ObjectId(magasin_id), "deleted_at": {"$exists": False}}):
         prix, achat = _num(p.get("prix")), _num(p.get("prix_achat"))
         if prix > 0 and achat > 0 and prix < achat:
-            catalogue_a_perte.append({"nom": p.get("nom") or "Produit", "prix_vente": prix, "prix_achat": achat})
+            catalogue_a_perte.append({"nom": p.get("nom") or "Article", "prix_vente": prix, "prix_achat": achat})
     catalogue_a_perte.sort(key=lambda x: x["prix_achat"] - x["prix_vente"], reverse=True)
 
     produits_vendus = ventes["produits"]
@@ -225,13 +225,13 @@ def _calculer_faits_gerant(user_id, magasin_id):
     oid = ObjectId(user_id)
     ventes = [v for v in db.tables.livraisons.find({"livreur_id": oid}) if v.get("deleted_at") is None]
     recentes = [v for v in ventes if v.get("created_at") and v["created_at"] >= depuis]
-    prix = {str(p["_id"]): (p.get("nom") or "Produit", _num(p.get("prix")))
+    prix = {str(p["_id"]): (p.get("nom") or "Article", _num(p.get("prix")))
             for p in db.tables.produits.find({"magasin_id": ObjectId(magasin_id)})}
     stock = []
     for s in db.tables.stocks_livreur.find({"livreur_id": oid}):
         q = _num(s.get("quantite"))
         if q > 0:
-            nom, pu = prix.get(str(s.get("produit_id")), ("Produit", 0))
+            nom, pu = prix.get(str(s.get("produit_id")), ("Article", 0))
             stock.append({"nom": nom, "quantite": q, "valeur_vente": q * pu})
     dettes = {}
     for v in ventes:
@@ -334,10 +334,10 @@ def faits_en_texte(faits):
             f"Charges : {m(v['charges'])} — résultat net : {m(v['resultat_net'])}",
             f"Retours clients : {m(v['retours'])} ({_n(v['taux_retour_pct'])} % des ventes)",
             f"Créances clients : {m(c['total'])}, dont {m(c['en_retard_plus_30j'])} impayées depuis plus de 30 jours",
-            f"Stock : {m(s['valeur'])} au prix d'achat pour {s['produits']} produits ; "
+            f"Stock : {m(s['valeur'])} au prix d'achat pour {s['produits']} articles ; "
             f"{_n(s['jours_de_stock'], 0)} jours de ventes en stock",
             f"Ruptures en magasin : {s['ruptures_en_magasin']} ; sous seuil d'alerte : {s['sous_seuil_alerte']} "
-            f"(seuil défini sur {s['produits_avec_seuil']} produit(s)) ; stock qui dort (60 j sans vente) : "
+            f"(seuil défini sur {s['produits_avec_seuil']} article(s)) ; stock qui dort (60 j sans vente) : "
             f"{s['produits_qui_dorment']} produit(s), {m(s['valeur_qui_dort'])}",
         ]
         if v.get("meilleur_creneau"):
@@ -346,18 +346,18 @@ def faits_en_texte(faits):
             lignes.append(f"Meilleur moment de vente : {jours[mc['jour']]} vers {mc['heure']} h")
         liste("Principaux clients débiteurs", c["principaux_debiteurs"],
               lambda e: f"{e['nom']} : {m(e['reste'])} (depuis {e['depuis_jours']} j)")
-        liste("Produits qui vont manquer (au rythme des ventes)", s["vont_manquer"],
+        liste("Articles qui vont manquer (au rythme des ventes)", s["vont_manquer"],
               lambda e: f"{e['nom']} : environ {_n(e['jours_restants'])} jours de stock ({_n(e['stock'])} en stock)")
-        liste("Produits en rupture ou sous seuil", s["a_reapprovisionner"], lambda e: f"{e['nom']} : {_n(e['quantite'])} en stock")
-        liste("Produits qui dorment", s["dorment"], lambda e: f"{e['nom']} : {m(e['valeur'])} immobilisés, {e['jours_sans_vente']} j sans vente")
+        liste("Articles en rupture ou sous seuil", s["a_reapprovisionner"], lambda e: f"{e['nom']} : {_n(e['quantite'])} en stock")
+        liste("Articles qui dorment", s["dorment"], lambda e: f"{e['nom']} : {m(e['valeur'])} immobilisés, {e['jours_sans_vente']} j sans vente")
         liste("Catégories qui immobilisent le plus de stock", s["categories_principales"], lambda e: f"{e['nom']} : {m(e['valeur'])}")
         liste("Meilleures ventes", p["meilleures_ventes"],
               lambda e: f"{e['nom']} : {_n(e['quantite'])} unité(s), {m(e['ca'])}, marge {_n(e['taux_marge_pct'])} %")
-        liste("Produits vendus sans marge (prix de vente ≤ coût d'achat)", p["vendus_sans_marge"],
+        liste("Articles vendus sans marge (prix de vente ≤ coût d'achat)", p["vendus_sans_marge"],
               lambda e: f"{e['nom']} : {m(e['ca'])} vendus, marge {_n(e['taux_marge_pct'])} %")
         liste("Prix de vente du catalogue inférieurs au prix d'achat", p["prix_catalogue_sous_achat"],
               lambda e: f"{e['nom']} : vendu {m(e['prix_vente'])}, acheté {m(e['prix_achat'])}")
-        liste("Produits les plus retournés", p["plus_retournes"], lambda e: f"{e['nom']} : {_n(e['quantite'])} unité(s)")
+        liste("Articles les plus retournés", p["plus_retournes"], lambda e: f"{e['nom']} : {_n(e['quantite'])} unité(s)")
         liste("Ventes par membre de l'équipe", faits["equipe"], lambda e: f"{e['nom']} ({e['role']}) : {e['ventes']} vente(s), {m(e['ca'])}")
     elif "caissier" in faits:
         c = faits["caissier"]
@@ -373,7 +373,7 @@ def faits_en_texte(faits):
         caisse = c["caisse"]
         lignes.append("Ma caisse : " + (f"ouverte, fond de caisse {m(caisse['fond_initial'])}, espèces attendues "
                                         f"{m(caisse['especes_attendues'])}" if caisse["ouverte"] else "fermée"))
-        liste("Mes produits les plus vendus (30 jours)", c["trente_jours"]["top_produits"],
+        liste("Mes articles les plus vendus (30 jours)", c["trente_jours"]["top_produits"],
               lambda e: f"{e['nom']} : {_n(e['quantite'])} unité(s), {m(e['chiffre_affaires'])}")
         lignes.append(f"Crédits en cours sur mes ventes : {m(c['credits']['total'])}")
         liste("Mes clients qui doivent encore de l'argent", c["credits"]["clients"], lambda e: f"{e['nom']} : {m(e['reste'])}")

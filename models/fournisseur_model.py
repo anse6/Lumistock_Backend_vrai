@@ -69,22 +69,48 @@ class FournisseurModel:
         return fournisseur
 
     @staticmethod
-    def update_fournisseur(fournisseur_id, data):
-        """
-        Met à jour un fournisseur.
-        """
-        update_data = {k: v for k, v in data.items() if k in ["nom", "pays", "ville", "telephone", "email", "adresse"]}
-        
-        result = FournisseurModel.get_collection().update_one(
-            {"_id": ObjectId(fournisseur_id)},
-            {"$set": update_data}
-        )
-        return result.modified_count > 0
+    def get_for_magasin(fournisseur_id, magasin_id):
+        """Fournisseur du magasin donné, ou None (identifiant invalide ou autre magasin)."""
+        if not ObjectId.is_valid(str(fournisseur_id)) or not ObjectId.is_valid(str(magasin_id)):
+            return None
+        return FournisseurModel.get_collection().find_one({
+            "_id": ObjectId(str(fournisseur_id)),
+            "magasin_id": ObjectId(str(magasin_id)),
+        })
 
     @staticmethod
-    def delete_fournisseur(fournisseur_id):
+    def update_fournisseur(fournisseur_id, magasin_id, data):
         """
-        Supprime un fournisseur.
+        Met à jour un fournisseur du magasin.
         """
-        result = FournisseurModel.get_collection().delete_one({"_id": ObjectId(fournisseur_id)})
+        update_data = {k: v for k, v in data.items() if k in ["nom", "pays", "ville", "telephone", "email", "adresse"]}
+        if not update_data:
+            return False
+        update_data["updated_at"] = datetime.utcnow()
+
+        result = FournisseurModel.get_collection().update_one(
+            {"_id": ObjectId(str(fournisseur_id)), "magasin_id": ObjectId(str(magasin_id))},
+            {"$set": update_data}
+        )
+        return result.matched_count > 0
+
+    @staticmethod
+    def est_utilise(fournisseur_id):
+        """Le fournisseur figure-t-il sur une facture ou une fiche produit ?
+
+        Ces documents gardent sa référence : le supprimer les rendrait orphelins.
+        """
+        oid = ObjectId(str(fournisseur_id))
+        return bool(
+            db.tables.factures_fournisseurs.find_one({"fournisseur_id": oid}, {"_id": 1})
+            or db.tables.produits.find_one({"fournisseur_id": oid}, {"_id": 1})
+        )
+
+    @staticmethod
+    def delete_fournisseur(fournisseur_id, magasin_id):
+        """
+        Supprime un fournisseur du magasin.
+        """
+        result = FournisseurModel.get_collection().delete_one(
+            {"_id": ObjectId(str(fournisseur_id)), "magasin_id": ObjectId(str(magasin_id))})
         return result.deleted_count > 0

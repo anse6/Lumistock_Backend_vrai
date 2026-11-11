@@ -166,14 +166,14 @@ def rapport_ventes(magasin_id, debut, fin, filtres=None, livreur_id=None):
             cout += cout_ligne
             lignes.append({
                 "produit_id": str(p.get("produit_id") or ""),
-                "nom": p.get("nom") or "Produit",
+                "nom": p.get("nom") or "Article",
                 "quantite": _arrondi(qte, 3),
                 "prix": _arrondi(prix),
                 "total": _arrondi(qte * prix),
                 "marge": _arrondi(qte * prix - cout_ligne),
             })
             if p.get("produit_id"):
-                options_produits[str(p["produit_id"])] = p.get("nom") or "Produit"
+                options_produits[str(p["produit_id"])] = p.get("nom") or "Article"
 
         brut = _num(l.get("montant_brut")) or sum(x["total"] for x in lignes)
         reductions = _num(l.get("total_reductions"))
@@ -204,7 +204,12 @@ def rapport_ventes(magasin_id, debut, fin, filtres=None, livreur_id=None):
             "montant_paye": _arrondi(paye),
             "reste": _arrondi(max(total - paye, 0)),
             "montant_retourne": _arrondi(_num(l.get("montant_retourne"))),
-            "montant_rembourse": _arrondi(_num(l.get("montant_rembourse"))),
+            # L'historique fait foi : les premiers remboursements sont antérieurs
+            # au compteur montant_rembourse (même règle que l'affichage des ventes).
+            "montant_rembourse": _arrondi(max(
+                _num(l.get("montant_rembourse")),
+                sum(_num(r.get("montant")) for r in (l.get("remboursements") or [])),
+            )),
             "cout_achat": _arrondi(cout),
             "marge": _arrondi(ht - cout),
             "statut": statut,
@@ -382,7 +387,7 @@ def famille_mouvement(type_mouvement, quantite=0):
         # Unités avariées remises en vente (coût 0) : ni achat ni perte.
         return "ajustements", "Mise en solde d'unités avariées"
     if "perime" in t or "avarie" in t:
-        return "pertes", "Avarie / produit périmé"
+        return "pertes", "Avarie / article périmé"
     if t == "approvisionnement livreur":
         return "livreurs", "Remise de stock au livreur"
     if "stock livreur" in t:
@@ -446,7 +451,7 @@ def rapport_mouvements(magasin_id, debut, fin, filtres=None):
             lignes.append({
                 "date": quand.isoformat(),
                 "produit_id": str(p["_id"]),
-                "produit": p.get("nom") or "Produit",
+                "produit": p.get("nom") or "Article",
                 "unite": p.get("unite") or "",
                 "produit_supprime": bool(p.get("deleted_at")),
                 "type": m.get("type"),
@@ -554,7 +559,7 @@ def rapport_stock_annuel(magasin_id, annee, filtres=None):
         prix_achat = _num(p.get("prix_achat"))
         ligne = {
             "produit_id": str(p["_id"]),
-            "produit": p.get("nom") or "Produit",
+            "produit": p.get("nom") or "Article",
             "categorie": categories.get(categorie_id, "Sans catégorie"),
             "unite": p.get("unite") or "",
             "supprime": bool(supprime),
@@ -636,7 +641,8 @@ def rapport_inventaire(magasin_id, filtres=None):
         achat, vente = _num(p.get("prix_achat")), _num(p.get("prix"))
         lignes.append({
             "produit_id": str(p["_id"]),
-            "produit": p.get("nom") or "Produit",
+            "suivi_serie": bool(p.get("suivi_serie")),
+            "produit": p.get("nom") or "Article",
             "reference": p.get("code_barre") or "",
             "categorie": categories.get(categorie_id, "Sans catégorie"),
             "unite": p.get("unite") or "",

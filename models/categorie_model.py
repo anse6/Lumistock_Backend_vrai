@@ -91,31 +91,53 @@ class CategorieModel:
         return categorie
     
     @staticmethod
-    def update_categorie(categorie_id, data):
-        """
-        Met à jour une catégorie existante.
-        
-        :param categorie_id: ID de la catégorie à mettre à jour
-        :param data: dict contenant les nouvelles informations
-        :return: bool indiquant si la mise à jour a réussi
-        """
-        result = CategorieModel.get_collection().update_one(
-            {"_id": ObjectId(categorie_id)},
-            {"$set": data}
-        )
-        return result.modified_count > 0
-    
+    def get_for_magasin(categorie_id, magasin_id):
+        """Catégorie du magasin donné, ou None (identifiant invalide ou autre magasin)."""
+        if not ObjectId.is_valid(str(categorie_id)) or not ObjectId.is_valid(str(magasin_id)):
+            return None
+        return CategorieModel.get_collection().find_one({
+            "_id": ObjectId(str(categorie_id)),
+            "magasin_id": ObjectId(str(magasin_id)),
+        })
+
     @staticmethod
-    def delete_categorie(categorie_id):
+    def nom_pris(nom, magasin_id, sauf_id=None):
+        """Une autre catégorie du magasin porte-t-elle déjà ce nom ?"""
+        existante = CategorieModel.get_collection().find_one({"nom": nom, "magasin_id": ObjectId(str(magasin_id))})
+        return bool(existante) and str(existante["_id"]) != str(sauf_id)
+
+    @staticmethod
+    def update_categorie(categorie_id, magasin_id, data):
         """
-        Supprime une catégorie par son ID.
-        
-        :param categorie_id: ID de la catégorie à supprimer
+        Met à jour une catégorie du magasin.
+
+        :param data: dict des champs autorisés (nom, description)
+        :return: bool indiquant si la catégorie a été trouvée
+        """
+        changements = {k: data[k] for k in ("nom", "description") if k in data}
+        changements["updated_at"] = datetime.utcnow()
+        result = CategorieModel.get_collection().update_one(
+            {"_id": ObjectId(str(categorie_id)), "magasin_id": ObjectId(str(magasin_id))},
+            {"$set": changements}
+        )
+        return result.matched_count > 0
+
+    @staticmethod
+    def est_utilisee(categorie_id):
+        """Des produits (corbeille comprise) sont-ils rangés dans cette catégorie ?"""
+        return bool(db.tables.produits.find_one({"categorie_id": ObjectId(str(categorie_id))}, {"_id": 1}))
+
+    @staticmethod
+    def delete_categorie(categorie_id, magasin_id):
+        """
+        Supprime une catégorie du magasin.
+
         :return: bool indiquant si la suppression a réussi
         """
-        result = CategorieModel.get_collection().delete_one({"_id": ObjectId(categorie_id)})
+        result = CategorieModel.get_collection().delete_one(
+            {"_id": ObjectId(str(categorie_id)), "magasin_id": ObjectId(str(magasin_id))})
         return result.deleted_count > 0
-    
+
     @staticmethod
     def get_all():
         return list(CategorieModel.get_collection().find({}))

@@ -2,8 +2,9 @@
 
 from flask import Blueprint, request, jsonify
 from utils.inject_magasin_id import inject_magasin_id
-from utils.decorators import role_required  # Import the missing decorator
+from utils.decorators import permission_requise, role_required
 from flask_jwt_extended import jwt_required  # Import jwt_required
+from bson import ObjectId
 from schemas.categorie_schema import CreateCategorieSchema, UpdateCategorieSchema
 from services.categorie_service import (
     create_categorie_service,
@@ -14,6 +15,14 @@ from services.categorie_service import (
 )
 
 categorie_bp = Blueprint("categorie", __name__, url_prefix="/categorie")
+
+
+def _magasin_courant():
+    """Magasin de l'utilisateur connecté, ou None s'il n'en a pas."""
+    try:
+        return inject_magasin_id({})["magasin_id"]
+    except Exception:
+        return None
 
 
 #Cree une nouvelle catégorie dans un magasin
@@ -107,9 +116,12 @@ def get_categories_by_magasin():
     data = inject_magasin_id(data)
     magasin_id = data.get("magasin_id")
     categories = get_categories_by_magasin_service(magasin_id)
+    from services.referentiels_service import compter_produits
+    nombres = compter_produits(magasin_id, "categorie_id")
     for cat in categories:
         cat["_id"] = str(cat["_id"])
         cat["magasin_id"] = str(cat["magasin_id"])
+        cat["nb_produits"] = nombres.get(cat["_id"], 0)
     return jsonify(categories), 200
 
 
@@ -118,6 +130,7 @@ def get_categories_by_magasin():
 @categorie_bp.route("/<categorie_id>", methods=["PUT"])
 @jwt_required()
 @role_required("admin", "manager", "livreur")
+@permission_requise("produits.modifier")
 def update_categorie(categorie_id):
     """
     Mise à jour d’une catégorie
@@ -156,13 +169,17 @@ def update_categorie(categorie_id):
     if errors:
         return jsonify({"errors": errors}), 400
 
-    update_categorie_service(categorie_id, data)
-    return jsonify({"message": "Catégorie mise à jour"}), 200
+    magasin_id = _magasin_courant()
+    if not magasin_id:
+        return jsonify({"message": "Catégorie non trouvée"}), 404
+    reponse, statut = update_categorie_service(categorie_id, magasin_id, data)
+    return jsonify(reponse), statut
 
 
 @categorie_bp.route("/<categorie_id>", methods=["DELETE"])
 @jwt_required()
 @role_required("admin", "manager", "livreur")
+@permission_requise("produits.modifier")
 def delete_categorie(categorie_id):
     """
     Suppression d’une catégorie
@@ -182,8 +199,11 @@ def delete_categorie(categorie_id):
       404:
         description: Catégorie non trouvée
     """
-    delete_categorie_service(categorie_id)
-    return jsonify({"message": "Catégorie supprimée"}), 200
+    magasin_id = _magasin_courant()
+    if not magasin_id:
+        return jsonify({"message": "Catégorie non trouvée"}), 404
+    reponse, statut = delete_categorie_service(categorie_id, magasin_id)
+    return jsonify(reponse), statut
 
 
 # Détails d'un catégorie
@@ -209,7 +229,13 @@ def get_categorie_details(categorie_id):
       404:
         description: Catégorie non trouvée
     """
-    categorie = get_categorie_details_service(categorie_id)
+    from flask_jwt_extended import get_jwt
+    from models.categorie_model import CategorieModel
+    if get_jwt().get("role") == "staff":
+        # Le staff de la plateforme consulte les catégories de tous les magasins.
+        categorie = CategorieModel.get_by_id(categorie_id) if ObjectId.is_valid(str(categorie_id)) else None
+    else:
+        categorie = CategorieModel.get_for_magasin(categorie_id, _magasin_courant())
     if not categorie:
         return jsonify({"message": "Catégorie non trouvée"}), 404
 

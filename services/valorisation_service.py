@@ -119,8 +119,22 @@ def charger_lots(produit_id):
 
 
 def _enregistrer(produit_id, lots):
+    """Enregistre les lots et recalcule le coût d'achat de l'article.
+
+    Comme dans Odoo, le coût d'achat (``prix_achat``) n'est pas le dernier
+    prix payé : c'est la valeur du stock restant divisée par sa quantité.
+    - CMUP : c'est le coût moyen pondéré, recalculé à chaque entrée.
+    - FIFO / LIFO : c'est le coût moyen des lots qui restent après les
+      sorties (les plus anciens sont partis en FIFO, les plus récents en LIFO).
+    Ainsi « quantité × coût d'achat » donne toujours la valeur réelle du stock
+    dans les rapports. Sans stock, le dernier coût connu est conservé.
+    """
     lots = [lot for lot in lots if lot["quantite_restante"] > _EPS or lot["quantite_initiale"] > _EPS]
-    ProduitModel.get_collection().update_one({"_id": ObjectId(str(produit_id))}, {"$set": {"lots": lots}})
+    modifs = {"lots": lots}
+    restants = [lot for lot in lots if lot["quantite_restante"] > _EPS]
+    if sum(lot["quantite_restante"] for lot in restants) > _EPS:
+        modifs["prix_achat"] = round(_cout_moyen(restants), 4)
+    ProduitModel.get_collection().update_one({"_id": ObjectId(str(produit_id))}, {"$set": modifs})
 
 
 def _cout_moyen(lots, defaut=0.0):
@@ -230,6 +244,46 @@ def restituer(produit_id, lots_consommes, quantite=None, origine="annulation"):
     return restants
 
 
+def cout_modifiable(lots):
+    """Le coût se corrige à la main seulement tant que l'article n'a reçu
+    qu'un seul lot d'achat (erreur de saisie à la création). Ensuite il est
+    calculé à partir des achats, comme dans Odoo."""
+    return len([lot for lot in lots if lot.get("quantite_initiale", 0) > _EPS]) <= 1
+
+
+def corriger_cout(produit_id, nouveau_cout):
+    """Corrige le coût du lot initial (et donc le coût d'achat de l'article).
+
+    :raises ValueError: si l'article a déjà reçu plusieurs lots.
+    """
+    produit, lots = charger_lots(produit_id)
+    if produit is None:
+        return None
+    if not cout_modifiable(lots):
+        raise ValueError(
+            "Le coût d'achat est calculé automatiquement à partir des approvisionnements "
+            "(méthode de valorisation du magasin) : il ne se modifie pas à la main."
+        )
+    for lot in lots:
+        lot["prix_unitaire"] = float(nouveau_cout or 0)
+    _enregistrer(produit_id, lots)
+    ProduitModel.get_collection().update_one(
+        {"_id": ObjectId(str(produit_id))},
+        {"$set": {"prix_achat": float(nouveau_cout or 0), "dernier_prix_achat": float(nouveau_cout or 0)}},
+    )
+    return float(nouveau_cout or 0)
+
+
+def recalculer_cout(produit_id):
+    """Recalcule le coût d'achat d'un article d'après ses lots (données
+    enregistrées avant que le coût ne suive la méthode de valorisation)."""
+    produit, lots = charger_lots(produit_id)
+    if produit is None:
+        return None
+    _enregistrer(produit_id, lots)
+    return ProduitModel.get_collection().find_one({"_id": ObjectId(str(produit_id))}).get("prix_achat")
+
+
 def _date(value):
     if isinstance(value, datetime):
         return value.replace(tzinfo=None)
@@ -301,12 +355,16 @@ def etat_stock(produit_id, magasin_id):
         prochain = ordre[0]["prix_unitaire"] if ordre else float(produit.get("prix_achat", 0) or 0)
     return {
         "methode": methode,
+        "methode_nom": METHODES[methode]["nom"],
+        "cout_achat": round(_cout_moyen(restants, produit.get("prix_achat", 0)), 4),
+        "dernier_prix_achat": round(float(produit.get("dernier_prix_achat", produit.get("prix_achat", 0)) or 0), 4),
+        "cout_modifiable": cout_modifiable(lots),
         "quantite_valorisee": round(quantite, 4),
         "valeur_stock": round(valeur, 2),
         "cout_moyen": round(_cout_moyen(restants, produit.get("prix_achat", 0)), 4),
         "cout_prochaine_sortie": round(prochain, 4),
         "lots": [
             {**lot, "date": lot["date"].isoformat() if isinstance(lot["date"], datetime) else lot["date"]}
-            for lot in sorted(restants, key=lambda lot: _date(lot["date"]))
+            for lot in sorted(lots, key=lambda lot: _date(lot["date"]))
         ],
     }

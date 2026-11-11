@@ -112,11 +112,12 @@ def _vente_valide(livraison):
 def _ca_ht(livraison):
     """Montant HT net des produits. Les anciennes ventes sans ce champ sont
     reconstituées : total - TVA - dette ancienne."""
-    montant = _num(livraison.get("montant_produits"))
-    if montant:
-        return montant
+    if livraison.get("montant_produits") is not None:
+        # 0 est une vraie valeur (vente entièrement retournée) : ne pas
+        # retomber sur le total, qui contient les frais de retour retenus.
+        return _num(livraison.get("montant_produits"))
     return max(_num(livraison.get("montant_total")) - _num(livraison.get("montant_tva"))
-               - _num(livraison.get("dette_ancienne")), 0.0)
+               - _num(livraison.get("dette_ancienne")) - _num(livraison.get("frais_retour")), 0.0)
 
 
 def _articles(livraison):

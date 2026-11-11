@@ -153,7 +153,7 @@ def _charge_normalisee(c):
 def _vente_normalisee(l):
     lignes = l.get("produits", []) or []
     brut = _num(l.get("montant_brut")) or sum(_num(p.get("quantite")) * _num(p.get("prix")) for p in lignes)
-    ht = _num(l.get("montant_produits")) or max(brut - _num(l.get("total_reductions")), 0)
+    ht = _num(l.get("montant_produits")) if l.get("montant_produits") is not None else max(brut - _num(l.get("total_reductions")), 0)
     return {
         "id": str(l["_id"]),
         "date": heure_locale(l.get("date_livraison") or l.get("created_at")),
@@ -245,8 +245,13 @@ class _Contexte:
                 prix = {str(p.get("produit_id")): _num(p.get("prix_achat")) for p in vente.get("produits") or []}
                 ht, tva = _num(r.get("montant_retour")), 0.0
                 cout = sum(_num(p.get("quantite")) * prix.get(str(p.get("produit_id")), 0) for p in r.get("produits") or [])
+            # Frais de retour : part HT (recette 7078) et part TVA (collectée).
+            # Avant le découpage, tout était compté en recette sans TVA.
+            frais_tva = _num(r.get("frais_retour_tva"))
+            frais_ht = _num(r.get("frais_retour_ht")) if r.get("frais_retour_ht") is not None \
+                else _num(r.get("frais_retour")) - frais_tva
             retour = {"id": str(r["_id"]), "vente_id": vente_id, "date": quand, "ht": ht, "tva": tva, "cout": cout,
-                      "frais": _num(r.get("frais_retour"))}
+                      "frais": frais_ht, "frais_tva": frais_tva}
             self.retours.append(retour)
             if vente_id in ventes:
                 ventes[vente_id]["ht"] += ht
@@ -340,7 +345,10 @@ class _Contexte:
 
     def tva_entre(self, debut, fin):
         """TVA collectée et récupérable de la période, par origine."""
-        collectee = sum(v["tva"] for v in self.ventes_entre(debut, fin)) - sum(r["tva"] for r in self.retours_entre(debut, fin))
+        retours = self.retours_entre(debut, fin)
+        # TVA des ventes, moins celle des articles rendus, plus celle des frais de retour retenus.
+        collectee = (sum(v["tva"] for v in self.ventes_entre(debut, fin)) - sum(r["tva"] for r in retours)
+                     + sum(r.get("frais_tva", 0.0) for r in retours))
         charges = sum(c["tva"] for c in self.charges_entre(debut, fin))
         achats = sum(f["tva"] for f in self.factures_entre(debut, fin)) - sum(a["tva"] for _, a in self.avoirs_entre(debut, fin))
         immobilisations = sum(_num(a.get("montant_tva")) for a in self.acquisitions_entre(debut, fin))
@@ -416,11 +424,15 @@ def _resultat(ctx, debut, fin):
     produits_hao = sum(prix for _, prix, _ in cessions)
     charges_hao = sum(vnc for _, _, vnc in cessions)
     avant_impot = rao + produits_hao - charges_hao
-    impot = fiscal_service.impot_sur_resultat(avant_impot, ca, ctx.fiscal)
+    # Chiffre d'affaires au sens SYSCOHADA (comptes 701 à 707) : ventes nettes
+    # de marchandises + produits accessoires (frais de retour retenus, HT).
+    # C'est la base de l'impôt minimum ; les marges restent calculées sur les ventes.
+    ca_total = ca + frais_retour
+    impot = fiscal_service.impot_sur_resultat(avant_impot, ca_total, ctx.fiscal)
     tva = ctx.tva_entre(debut, fin)
     return {
         "ventes_brutes": ventes_brutes, "retours": retours_ht, "frais_retour": frais_retour,
-        "ca": ca, "cout": cout, "marge": marge, "pertes": pertes, "externes": externes, "impots": impots,
+        "ca": ca, "ca_total": ca_total, "cout": cout, "marge": marge, "pertes": pertes, "externes": externes, "impots": impots,
         "personnel": personnel, "ebe": ebe, "dotations": dotations, "exploitation": exploitation,
         "financieres": financieres, "interets_emprunts": interets_emprunts, "rao": rao,
         "produits_hao": produits_hao, "charges_hao": charges_hao, "hao": produits_hao - charges_hao,
@@ -444,11 +456,12 @@ def _lignes_resultat(r, p):
 
     ajouter("ventes_brutes", "Ventes de marchandises (HT)", "701", "produit", r["ventes_brutes"], p["ventes_brutes"])
     ajouter("retours", "Retours clients de la période", "701", "charge", r["retours"], p["retours"])
-    ajouter("ca", "Chiffre d'affaires net", "", "total", r["ca"], p["ca"])
-    ajouter("cout", "Coût d'achat des marchandises vendues", "601/6031", "charge", r["cout"], p["cout"])
-    ajouter("marge", "Marge commerciale", "", "total", r["marge"], p["marge"])
+    ajouter("ca", "Ventes nettes de marchandises", "", "total", r["ca"], p["ca"])
     if r["frais_retour"] or p["frais_retour"]:
-        ajouter("frais_retour", "Frais de retour retenus aux clients", "7078", "produit", r["frais_retour"], p["frais_retour"])
+        ajouter("frais_retour", "Frais de retour retenus aux clients (HT)", "7078", "produit", r["frais_retour"], p["frais_retour"])
+        ajouter("ca_total", "Chiffre d'affaires", "701-707", "total", r["ca_total"], p["ca_total"])
+    ajouter("cout", "Coût d'achat des marchandises vendues", "601/6031", "charge", r["cout"], p["cout"])
+    ajouter("marge", "Marge commerciale (ventes − coût d'achat)", "", "total", r["marge"], p["marge"])
     ajouter("pertes", "Pertes et avaries de stock", "6031", "charge", r["pertes"], p["pertes"])
     for rubrique, titre in (("externes", "Charges externes"), ("impots", "Impôts et taxes"),
                             ("personnel", "Charges de personnel")):
@@ -790,12 +803,14 @@ def synthese(magasin_id, debut, fin):
         "precedente": {"debut": p_debut.isoformat(), "fin": p_fin.isoformat()},
         "compte_resultat": _lignes_resultat(r, p),
         "indicateurs": {
-            "chiffre_affaires": a(r["ca"]), "chiffre_affaires_precedent": a(p["ca"]),
+            # Chiffre d'affaires officiel (ventes + frais de retour HT) ; ventes seules à part.
+            "chiffre_affaires": a(r["ca_total"]), "chiffre_affaires_precedent": a(p["ca_total"]),
+            "ventes_marchandises": a(r["ca"]), "frais_retour": a(r["frais_retour"]),
             "marge": a(r["marge"]), "marge_precedente": a(p["marge"]),
             "taux_marge": _arrondi(taux_marge * 100, 1),
             "ebe": a(r["ebe"]), "resultat_net": a(r["net"]), "resultat_net_precedent": a(p["net"]),
             "resultat_avant_impot": a(r["avant_impot"]), "impot_resultat": a(r["impot"]),
-            "taux_resultat": _arrondi(r["net"] / r["ca"] * 100, 1) if r["ca"] else 0,
+            "taux_resultat": _arrondi(r["net"] / r["ca_total"] * 100, 1) if r["ca_total"] else 0,
             "charges": a(r["pertes"] + charges_fixes), "charges_precedentes": a(_charges_totales(p)),
             "charges_fixes": a(charges_fixes),
             "seuil_rentabilite": a(seuil) if seuil is not None else None,
@@ -886,7 +901,7 @@ def situation_fiscale(magasin_id, annee, params):
                 statut = "paye"
             else:
                 statut = "credit" if credit_suivant > 0 else "neant"
-            ca = _resultat(ctx, curseur, fin_mois)["ca"] if curseur <= maintenant else 0.0
+            ca = _resultat(ctx, curseur, fin_mois)["ca_total"] if curseur <= maintenant else 0.0
             lignes.append({
                 "mois": curseur.month, "periode": periode, "echeance": echeance.isoformat(), "statut": statut,
                 "collectee": ar(t["collectee"]), "deductible": ar(t["deductible"]),
@@ -912,7 +927,7 @@ def situation_fiscale(magasin_id, annee, params):
                    "paye": total("paye"), "reste": total("reste"), "credit_fin": ar(credit),
                    "acomptes_is": total("acompte_is")},
         "impot_resultat": {
-            "exercice": annee, "chiffre_affaires": ar(r["ca"]), "resultat_avant_impot": ar(r["avant_impot"]),
+            "exercice": annee, "chiffre_affaires": ar(r["ca_total"]), "resultat_avant_impot": ar(r["avant_impot"]),
             "theorique": ar(r["impot_detail"]["theorique"]), "minimum": ar(r["impot_detail"]["minimum"]),
             "du": ar(r["impot"]), "verse": ar(verse_is), "reste": ar(r["impot"] - verse_is),
             "base": "minimum" if r["impot_detail"]["minimum"] > r["impot_detail"]["theorique"] else "benefice",
@@ -962,7 +977,8 @@ def journal(magasin_id, debut, fin):
                [("701", r["ht"], 0), ("4431", r["tva"], 0), ("411", 0, r["ht"] + r["tva"])], f"retour:{r['id']}")
         if r["frais"]:
             ecrire(r["date"], "VT", piece, f"Frais de retour retenus {piece}",
-                   [("411", r["frais"], 0), ("7078", 0, r["frais"])], f"retour:{r['id']}:frais")
+                   [("411", r["frais"] + r.get("frais_tva", 0.0), 0), ("7078", 0, r["frais"]),
+                    ("4431", 0, r.get("frais_tva", 0.0))], f"retour:{r['id']}:frais")
 
     for o in encaissements(magasin_id, debut, fin):
         quand = _date(o["date"])

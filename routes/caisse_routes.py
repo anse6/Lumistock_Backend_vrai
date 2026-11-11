@@ -489,8 +489,8 @@ def caissiers():
 # ventes, choix des produits, vente finale). Ces routes renvoient exactement
 # les mêmes réponses que leurs équivalents admin, limitées à SES ventes et
 # sans prix d'achat ni coût de revient.
-_CHAMPS_INTERDITS = {"prix_achat", "cout_achat_total", "lots_consommes", "methode_valorisation", "lots",
-                     "mouvements_stock"}
+_CHAMPS_INTERDITS = {"prix_achat", "dernier_prix_achat", "cout_achat_total", "lots_consommes",
+                     "methode_valorisation", "lots", "mouvements_stock"}
 
 
 def _sans_couts(valeur):

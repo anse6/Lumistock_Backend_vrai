@@ -42,6 +42,16 @@ from schemas.produit_schema import CreateProduitSchema, UpdateProduitSchema, Exp
 produit_bp = Blueprint("produit", __name__)
 
 
+def _lire_numeros_serie(data):
+    """Formulaire multipart : la liste des numéros de série arrive en JSON."""
+    if isinstance(data.get("numeros_serie"), str):
+        try:
+            valeur = json.loads(data["numeros_serie"])
+        except json.JSONDecodeError:
+            valeur = data["numeros_serie"].splitlines()
+        data["numeros_serie"] = [str(n) for n in valeur] if isinstance(valeur, list) else []
+
+
 def _produit_du_magasin(produit_id, in_corbeille=False):
     """Charge un produit du magasin de l'utilisateur connecté.
 
@@ -55,7 +65,7 @@ def _produit_du_magasin(produit_id, in_corbeille=False):
         return None, (jsonify({"error": "Aucun magasin n'est associé à cet utilisateur."}), 403)
     produit = ProduitModel.get_for_magasin(produit_id, magasin_id, in_corbeille=in_corbeille)
     if not produit:
-        message = "Produit introuvable dans la corbeille" if in_corbeille else "Produit non trouvé"
+        message = "Article introuvable dans la corbeille" if in_corbeille else "Article non trouvé"
         return None, (jsonify({"error": message}), 404)
     return produit, None
 
@@ -242,6 +252,7 @@ def create_produit():
                 data["conditionnements"] = json.loads(data["conditionnements"])
             except json.JSONDecodeError:
                 data["conditionnements"] = []
+        _lire_numeros_serie(data)
         
         errors = CreateProduitSchema().validate(data)
         if errors:
@@ -893,6 +904,7 @@ def update_produit(produit_id):
                 data["conditionnements"] = json.loads(data["conditionnements"])
             except json.JSONDecodeError:
                 data["conditionnements"] = []
+        _lire_numeros_serie(data)
  
         errors = UpdateProduitSchema().validate(data)
         if errors:
@@ -905,6 +917,41 @@ def update_produit(produit_id):
     except BadRequest as e:
         return jsonify({"message": str(e)}), 400
 
+
+
+# Mettre plusieurs articles à la corbeille (sélection par cases à cocher)
+@produit_bp.route("/produits/supprimer-plusieurs", methods=["POST"])
+@jwt_required()
+@role_required("admin", "manager")
+@permission_requise("produits.supprimer")
+def supprimer_plusieurs_produits():
+    """
+    Mettre plusieurs articles à la corbeille
+    ---
+    tags:
+      - Produits
+    parameters:
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            ids:
+              type: array
+              items: {type: string}
+    responses:
+      200: {description: Articles mis à la corbeille}
+      400: {description: Sélection vide ou invalide}
+      404: {description: Un article n'existe pas ou n'est pas du magasin (rien n'est supprimé)}
+    """
+    from services.produit_service import supprimer_plusieurs_service
+    try:
+        magasin_id = inject_magasin_id({})["magasin_id"]
+    except Exception:
+        return jsonify({"error": "Aucun magasin n'est associé à cet utilisateur."}), 403
+    ids = (request.get_json(silent=True) or {}).get("ids")
+    result, status_code = supprimer_plusieurs_service(ids, magasin_id)
+    return jsonify(result), status_code
 
 
 # Supprimer un produit de la base de données
@@ -1040,7 +1087,7 @@ def get_produit_by_id(produit_id):
         return erreur
     produit = get_produit_by_id_service(produit_id)
     if not produit:
-        return jsonify({"message": "Produit non trouvé"}), 404
+        return jsonify({"message": "Article non trouvé"}), 404
     produit["_id"] = str(produit["_id"])
     produit["magasin_id"] = str(produit["magasin_id"])
     produit["categorie_id"] = str(produit["categorie_id"]) if produit.get("categorie_id") else None
@@ -1087,7 +1134,7 @@ def get_mouvements_stock(produit_id):
 
 # Fonctions statistiques
 """
-Retourne les produits les plus vendus par un livreur, classés par quantité totale 
+Retourne les articles les plus vendus par un livreur, classés par quantité totale 
 livrée (du plus vendu au moins vendu) 
 """
 @produit_bp.route("/produits/best/livreur/", methods=["GET"])

@@ -16,6 +16,8 @@ from services import valorisation_service
 from services import reductions_service
 from services import tva_service
 from services.lignes_vente import valider_lignes_vente, quantites_par_produit
+from services import numeros_serie_service
+from services.numeros_serie_service import ErreurNumeroSerie
 
 
 DETTE_ANCIENNE_REFUSEE = (
@@ -72,6 +74,9 @@ def creer_livraison(data):
     erreur_lignes = valider_lignes_vente(validated_data["produits"])
     if erreur_lignes:
         return {"error": erreur_lignes[0]}, erreur_lignes[1]
+    erreur_serie = _refus_articles_suivis_gerant(validated_data["produits"])
+    if erreur_serie:
+        return erreur_serie
     # La dette d'avant Lumistock se gère sur le compte du client, plus dans une vente.
     if float(validated_data.get("dette_ancienne", 0) or 0) > 0:
         return {"error": DETTE_ANCIENNE_REFUSEE}, 400
@@ -90,13 +95,13 @@ def creer_livraison(data):
         produit_id = produit["produit_id"]
         produit_data = ProduitModel.get_by_id(produit_id)
         if not produit_data:
-            return {"error": f"Produit {produit_id} introuvable"}, 404
+            return {"error": f"Article {produit_id} introuvable"}, 404
 
         # Gestion avec ou sans conditionnement
         if "conditionnement_id" in produit and "quantite_conditionnement" in produit:
             conditionnement = ProduitModel.get_conditionnement_by_id(produit_id, produit["conditionnement_id"])
             if not conditionnement:
-                return {"error": f"Conditionnement introuvable pour le produit {produit_id}"}, 404
+                return {"error": f"Conditionnement introuvable pour l'article {produit_id}"}, 404
 
             produits_final.append({
                 "produit_id": ObjectId(produit_id),
@@ -105,6 +110,7 @@ def creer_livraison(data):
                 "prix": float(conditionnement["prix_conditionnement"])/ int(conditionnement["facteur"]),
                 "prix_achat": float(produit_data.get("prix_achat", 0)), # Nouveau : capture du prix d'achat
                 "conditionnement_id": produit["conditionnement_id"],
+                "conditionnement_nom": conditionnement.get("nom"),
                 "facteur": int(conditionnement["facteur"]),
                 "is_conditionne": True
             })
@@ -195,9 +201,9 @@ def verifier_stock_livreur(livreur_id, produits_demandes):
     # Un même produit sur plusieurs lignes est additionné avant la comparaison.
     for pid, qte in quantites_par_produit(produits_demandes).items():
         if pid not in stock_map:
-            return False, f"Produit {pid} non disponible pour ce livreur."
+            return False, f"Article {pid} non disponible pour ce livreur."
         if stock_map[pid] < qte:
-            return False, f"Quantité insuffisante pour le produit {pid}."
+            return False, f"Quantité insuffisante pour l'article {pid}."
 
     return True, None
 
@@ -216,12 +222,28 @@ def verifier_stock_magasin(magasin_id, produits_demandes):
     # Un même produit sur plusieurs lignes est additionné avant la comparaison.
     for pid, qte in quantites_par_produit(produits_demandes).items():
         if pid not in stock_map:
-            return False, f"Produit {pid} non disponible dans ce magasin."
+            return False, f"Article {pid} non disponible dans ce magasin."
         if stock_map[pid] <qte:
-            return False, f"Quantité insuffisante pour le produit {pid}"
+            return False, f"Quantité insuffisante pour l'article {pid}"
 
     return True, None
 
+
+
+MESSAGE_SERIE_GERANT = ("« {nom} » est suivi par numéro de série : la vente par un gérant n'est pas "
+                        "encore possible pour ces articles. Vendez-le depuis le magasin.")
+
+
+def _refus_articles_suivis_gerant(lignes):
+    for ligne in lignes:
+        produit = ProduitModel.get_by_id(str(ligne.get("produit_id")))
+        if numeros_serie_service.est_suivi(produit):
+            return {"error": MESSAGE_SERIE_GERANT.format(nom=produit.get("nom"))}, 400
+    return None
+
+
+def _produits_des_lignes(lignes):
+    return {str(l["produit_id"]): ProduitModel.get_by_id(str(l["produit_id"])) for l in lignes}
 
 
 def construire_lignes_magasin(produits_input, prix_impose=False):
@@ -237,7 +259,7 @@ def construire_lignes_magasin(produits_input, prix_impose=False):
         produit_id = produit["produit_id"]
         produit_data = ProduitModel.get_by_id(produit_id)
         if not produit_data:
-            return None, ({"error": f"Produit {produit_id} introuvable"}, 404)
+            return None, ({"error": f"Article {produit_id} introuvable"}, 404)
 
         if "conditionnement_id" in produit and "quantite_conditionnement" in produit:
             conditionnement = ProduitModel.get_conditionnement_by_id(produit_id, produit["conditionnement_id"])
@@ -251,6 +273,7 @@ def construire_lignes_magasin(produits_input, prix_impose=False):
                 "prix": float(conditionnement["prix_conditionnement"])/ int(conditionnement["facteur"]),
                 "prix_achat": float(produit_data.get("prix_achat", 0)), # Nouveau
                 "conditionnement_id": produit["conditionnement_id"],
+                "conditionnement_nom": conditionnement.get("nom"),
                 "facteur": int(conditionnement["facteur"]),
                 "is_conditionne": True,
                 "type_vente" : "conditionne" # unitaire
@@ -259,14 +282,17 @@ def construire_lignes_magasin(produits_input, prix_impose=False):
             # Priorité au prix envoyé par le frontend (sauf prix imposé), sinon prix de base du produit
             prix_saisi = produit.get("prix") if not prix_impose else None
             prix_vente = float(prix_saisi) if prix_saisi is not None else float(produit_data["prix"])
-            produits_final.append({
+            ligne = {
                 "produit_id": produit_id,
                 "nom": produit_data["nom"],
                 "quantite": int(produit["quantite"]),
                 "prix": prix_vente,
                 "prix_achat": float(produit_data.get("prix_achat", 0)), # Nouveau
                 "is_conditionne": False
-            })
+            }
+            if produit.get("numeros_serie") is not None:
+                ligne["numeros_serie"] = produit["numeros_serie"]
+            produits_final.append(ligne)
     return produits_final, None
 
 
@@ -320,6 +346,12 @@ def creer_livraison_by_manager(data, vendeur_role=None, session_caisse_id=None, 
     if erreur:
         return erreur
 
+    # Articles suivis par numéro de série : chaque unité vendue est désignée.
+    try:
+        numeros_serie_service.preparer_lignes_vente(produits_final, _produits_des_lignes(produits_final))
+    except ErreurNumeroSerie as err:
+        return {"error": str(err)}, err.statut
+
     ok, error = verifier_stock_magasin(data["magasin_id"], produits_final)
     if not ok:
         return {"error": error}, 400
@@ -362,6 +394,16 @@ def creer_livraison_by_manager(data, vendeur_role=None, session_caisse_id=None, 
     }
     if vendeur_role:
         acteur["role"] = vendeur_role
+
+    try:
+        vendeur = UserModel.find_by_id(manager_id) or {}
+        numeros_serie_service.vendre_lignes(
+            produits_final, livraison_id,
+            {"admin_id": manager_id, "admin_nom": f"{vendeur.get('first_name', '')} {vendeur.get('name', '')}".strip()},
+            client_id=validated_data["client_id"], client_nom=acteur["client_nom"])
+    except ErreurNumeroSerie as err:
+        abandonner()
+        return {"error": str(err)}, err.statut  # réponse ≥ 400 : la vente est annulée en base
 
     for produit in produits_final:
         ProduitModel.tracer_sortie(
@@ -460,28 +502,43 @@ def _paiement_modification(livraison, validated_data, update_fields, montant_tot
     return statut_paiement
 
 
-def _lignes_modifiees(produits_input):
-    """Lignes d'une vente modifiée : (lignes, montant brut, quantité) ou (None, erreur)."""
+def _lignes_modifiees(produits_input, lignes_avant=None):
+    """Lignes d'une vente modifiée : (lignes, montant brut, quantité) ou (None, erreur).
+
+    Un conditionnement déjà présent dans la vente garde le prix et le nombre
+    d'unités de la vente d'origine : changer ensuite le prix du carton sur la
+    fiche (ou le supprimer) ne modifie pas une vente passée."""
+    avant = {(str(l.get("produit_id")), str(l.get("conditionnement_id"))): l
+             for l in (lignes_avant or []) if l.get("is_conditionne") and l.get("conditionnement_id")}
     lignes, montant, quantite_totale = [], 0.0, 0
     for produit in produits_input:
         produit_id = produit["produit_id"]
         produit_data = ProduitModel.get_by_id(produit_id)
         if not produit_data:
-            return None, ({"error": f"Produit {produit_id} introuvable"}, 404)
+            return None, ({"error": f"Article {produit_id} introuvable"}, 404)
         ligne = {
             "produit_id": ObjectId(produit_id),
             "nom": produit_data["nom"],
             "prix_achat": float(produit_data.get("prix_achat", 0)),
         }
         if "conditionnement_id" in produit and "quantite_conditionnement" in produit:
-            conditionnement = ProduitModel.get_conditionnement_by_id(produit_id, produit["conditionnement_id"])
-            if not conditionnement:
-                return None, ({"error": f"Conditionnement introuvable pour le produit {produit_id}"}, 404)
-            facteur = int(conditionnement["facteur"])
+            origine = avant.get((str(produit_id), str(produit["conditionnement_id"])))
+            if origine:
+                facteur = int(origine.get("facteur") or 1)
+                prix_unitaire = float(origine.get("prix") or 0)
+                nom_cond = origine.get("conditionnement_nom")
+            else:
+                conditionnement = ProduitModel.get_conditionnement_by_id(produit_id, produit["conditionnement_id"])
+                if not conditionnement:
+                    return None, ({"error": f"Conditionnement introuvable pour « {produit_data['nom']} »"}, 404)
+                facteur = int(conditionnement["facteur"])
+                prix_unitaire = float(conditionnement["prix_conditionnement"]) / facteur
+                nom_cond = conditionnement.get("nom")
             ligne.update({
                 "quantite": int(produit["quantite_conditionnement"]) * facteur,
-                "prix": float(conditionnement["prix_conditionnement"]) / facteur,
+                "prix": prix_unitaire,
                 "conditionnement_id": produit["conditionnement_id"],
+                "conditionnement_nom": nom_cond,
                 "facteur": facteur,
                 "is_conditionne": True,
                 "type_vente": "conditionne",
@@ -493,6 +550,8 @@ def _lignes_modifiees(produits_input):
                 "prix": float(prix) if prix is not None else float(produit_data["prix"]),
                 "is_conditionne": False,
             })
+            if produit.get("numeros_serie") is not None:
+                ligne["numeros_serie"] = produit["numeros_serie"]
         lignes.append(ligne)
         montant += ligne["quantite"] * ligne["prix"]
         quantite_totale += ligne["quantite"]
@@ -518,7 +577,21 @@ def _remplacer_lignes_stock(livraison, anciennes, nouvelles, depuis_magasin):
         disponible[pid] = disponible.get(pid, 0) + ligne["quantite"]
     for pid, demande in quantites_par_produit(nouvelles).items():
         if disponible.get(pid, 0) < demande:
-            return {"error": f"Quantité insuffisante pour le produit {pid} {ou}."}, 400
+            return {"error": f"Quantité insuffisante pour l'article {pid} {ou}."}, 400
+
+    produits_par_id = _produits_des_lignes(list(anciennes) + list(nouvelles))
+    if depuis_magasin:
+        try:
+            client_vente = ClientModel.get_client_by_id(livraison["client_id"]) or {}
+            numeros_serie_service.modifier_lignes(
+                anciennes, nouvelles, produits_par_id, livraison["_id"],
+                {"admin_id": livraison.get("manager_id")},
+                client_id=livraison["client_id"], client_nom=client_vente.get("nom"))
+        except ErreurNumeroSerie as err:
+            return {"error": str(err)}, err.statut
+    elif any(numeros_serie_service.est_suivi(p) for p in produits_par_id.values()):
+        nom = next(p.get("nom") for p in produits_par_id.values() if numeros_serie_service.est_suivi(p))
+        return {"error": MESSAGE_SERIE_GERANT.format(nom=nom)}, 400
 
     valorisation_service.annuler_lignes(anciennes, "modification livraison")
     valorisation_service.valoriser_lignes(nouvelles, livraison.get("magasin_id"))
@@ -606,7 +679,7 @@ def modifier_livraison_service(livraison_id, data, depuis_magasin):
         erreur_lignes = valider_lignes_vente(validated_data["produits"])
         if erreur_lignes:
             return {"error": erreur_lignes[0]}, erreur_lignes[1]
-        resultat, erreur = _lignes_modifiees(validated_data["produits"])
+        resultat, erreur = _lignes_modifiees(validated_data["produits"], livraison.get("produits"))
         if erreur:
             return erreur
         produits_final, nouveau_montant_produits, nouvelle_quantite_totale = resultat
@@ -688,6 +761,13 @@ def etat_vente(livraison):
     return "validee"
 
 
+def _iso_utc(valeur):
+    """Date UTC naïve de la base -> texte ISO avec « Z » (déjà texte : inchangé)."""
+    if isinstance(valeur, datetime):
+        return valeur.isoformat() + ("Z" if valeur.tzinfo is None else "")
+    return str(valeur) if valeur is not None and not isinstance(valeur, str) else valeur
+
+
 def serialize_livraison(livraison):
     # Récupération des informations du client
     client_data = ClientModel.get_client_by_id(livraison["client_id"])
@@ -764,11 +844,13 @@ def serialize_livraison(livraison):
         "frais_retour": round_float(livraison.get("frais_retour", 0)),
         "methode_paiement": livraison.get("methode_paiement", "cash"),
         "paiements": livraison.get("paiements", []),
-        "date_commande": livraison["date_commande"].isoformat() if isinstance(livraison["date_commande"], datetime) else str(livraison["date_commande"]),
-        "created_at": livraison["created_at"].isoformat() if isinstance(livraison["created_at"], datetime) else str(livraison["created_at"]),
-        "updated_at": livraison["updated_at"].isoformat() if isinstance(livraison["updated_at"], datetime) else str(livraison["updated_at"]),
+        # Dates enregistrées en UTC : le « Z » permet au navigateur de les
+        # afficher (et de les filtrer par jour) à l'heure locale du magasin.
+        "date_commande": _iso_utc(livraison["date_commande"]),
+        "created_at": _iso_utc(livraison["created_at"]),
+        "updated_at": _iso_utc(livraison["updated_at"]),
         # Vente annulée (corbeille) : quand, par qui, et l'argent rendu au client.
-        "deleted_at": livraison["deleted_at"].isoformat() if isinstance(livraison.get("deleted_at"), datetime) else livraison.get("deleted_at"),
+        "deleted_at": _iso_utc(livraison.get("deleted_at")),
         "annulation": livraison.get("annulation"),
     }
 
@@ -845,8 +927,8 @@ def get_livraison_managers(magasin_id=None, vendeur_id=None):
             produit_id = item.get("produit_id")
             produit_info = ProduitModel.get_by_id(produit_id)
 
-            conditionnement_nom = None
-            if item.get("is_conditionne", False) and item.get("conditionnement_id"):
+            conditionnement_nom = item.get("conditionnement_nom")
+            if not conditionnement_nom and item.get("is_conditionne", False) and item.get("conditionnement_id"):
                 conditionnement = ProduitModel.get_conditionnement_by_id(
                     produit_id,
                     item["conditionnement_id"]
@@ -929,8 +1011,8 @@ def details_livraison_service(livreur_id, livraison_id):
         produit_id = item.get("produit_id")
         produit_info = ProduitModel.get_by_id(produit_id)
 
-        conditionnement_nom = None
-        if item.get("is_conditionne", False) and item.get("conditionnement_id"):
+        conditionnement_nom = item.get("conditionnement_nom")
+        if not conditionnement_nom and item.get("is_conditionne", False) and item.get("conditionnement_id"):
             conditionnement = ProduitModel.get_conditionnement_by_id(
                 produit_id,
                 item["conditionnement_id"]
@@ -953,8 +1035,14 @@ def details_livraison_service(livreur_id, livraison_id):
             "conditionnement_nom": conditionnement_nom,  # ajout ici
             "facteur": item.get("facteur"),
             "quantite_magasin": produit_info.get("quantite", 0) if produit_info else 0, # ajout de la quantite dispo en magasin
-            "quantite_livreur": StockLivreurModel.get_produit_quantite(livraison["livreur_id"], produit_id)
+            "quantite_livreur": StockLivreurModel.get_produit_quantite(livraison["livreur_id"], produit_id),
+            # Pour l'écran de modification : cartons proposés et unités vendues.
+            "conditionnements": (produit_info or {}).get("conditionnements") or [],
+            "prix_vente_fiche": (produit_info or {}).get("prix"),
+            "suivi_serie": numeros_serie_service.est_suivi(produit_info) if produit_info else False,
         }
+        if item.get("numeros_serie") is not None:
+            enriched_item["numeros_serie"] = list(item.get("numeros_serie") or [])
 
         produits_enrichis.append(enriched_item)
 
@@ -1161,6 +1249,8 @@ def supprimer_livraison_service(livraison_id, data=None, user_id=None):
 
     if est_livraison_manager(livraison):
         # Livraison faite depuis le stock du magasin : les articles y retournent.
+        numeros_serie_service.rendre_lignes(livraison["produits"], "annulation",
+                                            {"admin_id": user_id}, vente_id=livraison_id)
         acteur_magasin = {
             "admin_id": str(livraison.get("manager_id")),
             "client_id": str(livraison.get("client_id")),
@@ -1259,7 +1349,17 @@ def restaurer_livraison_service(livraison_id):
         for produit in produits_demandes:
             produit_db = ProduitModel.get_by_id(str(produit["produit_id"]))
             if not produit_db or int(produit_db.get("quantite", 0)) < int(produit["quantite"]):
-                return {"error": f"Impossible de restaurer. Stock magasin insuffisant pour le produit {produit.get('nom', produit['produit_id'])}."}, 400
+                return {"error": f"Impossible de restaurer. Stock magasin insuffisant pour l'article {produit.get('nom', produit['produit_id'])}."}, 400
+            if produit.get("numeros_serie"):
+                try:
+                    numeros_serie_service.verifier_disponibles(produit_db, produit["numeros_serie"],
+                                                               len(produit["numeros_serie"]))
+                except ErreurNumeroSerie as err:
+                    return {"error": f"Impossible de restaurer : {err}"}, 400
+        client_restaure = ClientModel.get_client_by_id(client_id) or {}
+        numeros_serie_service.vendre_lignes(produits_demandes, livraison_id, {"admin_id": livraison.get("manager_id")},
+                                            client_id=client_id, client_nom=client_restaure.get("nom"),
+                                            type_="restauration")
         valorisation_service.valoriser_lignes(produits_demandes, livraison.get("magasin_id"))
         acteur_magasin = {"admin_id": str(livraison.get("manager_id")), "client_id": str(client_id),
                           "livraison_id": str(livraison_id)}
@@ -1291,7 +1391,7 @@ def restaurer_livraison_service(livraison_id):
         pid = str(produit["produit_id"])
         qte = int(produit["quantite"])
         if pid not in stock_map or stock_map[pid] < qte:
-            return {"error": f"Impossible de restaurer. Le livreur n'a pas assez de stock pour le produit {produit.get('nom', pid)}."}, 400
+            return {"error": f"Impossible de restaurer. Le livreur n'a pas assez de stock pour l'article {produit.get('nom', pid)}."}, 400
 
     # 2. Retirer le stock du livreur (qui lui avait été rendu lors de la suppression)
     valorisation_service.valoriser_lignes(produits_demandes, livraison.get("magasin_id"))
@@ -1740,7 +1840,7 @@ def accorder_ristourne_service(livreur_id, livraison_id, montant_ristourne):
         return erreur_cloture
     plafond = _plafond_ristourne(livraison)
     if montant_ristourne > plafond + 0.005:
-        return {"error": f"La ristourne ne peut pas dépasser la valeur des produits ({plafond:g})."}, 400
+        return {"error": f"La ristourne ne peut pas dépasser la valeur des articles ({plafond:g})."}, 400
 
     try:
         champs = _ristourne_sur_vente(livraison, float(montant_ristourne), "Accordée par le vendeur")

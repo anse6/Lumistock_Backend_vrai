@@ -98,6 +98,12 @@ FIELDS = {
         "non_lus_admin non_lus_staff dernier_message vu_admin_le vu_staff_le notifie_admin_le notifie_staff_le"
     ),
     "support_messages": "conversation_id magasin_id auteur auteur_id auteur_nom texte",
+    # Numéros de série : une ligne par unité physique d'un article suivi
+    # (machines…) ; son état, son entrée, sa sortie et tout son historique.
+    "numeros_serie": (
+        "magasin_id produit_id numero_serie statut vente_id client_id cout_achat prix_vente "
+        "date_entree date_sortie origine fournisseur_id facture_id historique"
+    ),
     # Financement : apports, retraits de l'exploitant, emprunts et remboursements.
     "financements": (
         "magasin_id type libelle tiers montant interets date_operation mode_paiement emprunt_id note cree_par"
@@ -105,17 +111,18 @@ FIELDS = {
 }
 JSON_FIELDS = set("licence mouvements_stock conditionnements produits paiements avoirs tags lignes pieces_jointes "
                   "rapproche_avec bilan compte_resultat canaux modeles options canaux_envoi client_ids jours resume codes_secours reponses "
-                  "sources".split())
+                  "sources historique".split())
 BOOL_FIELDS = set("created_by_staff is_active active barcode_mode have_ristourne have_retour action_manager vu archivee "
                   "actif lu pertinente".split())
 INT_FIELDS = set(("quantite quantite_initiale duree_vie_annees exercice total envoyes echecs ignores dernier_pas "
                   "questions_pertinentes non_lus_staff non_lus_visiteur non_lus_admin").split())
-MONEY_FIELDS = set("prix prix_achat montant_en_caisse montant_total montant_produits dette_ancienne montant_paye montant_deduit_caisse relicat ristourne retour montant_retour montant_initial montant valeur_achat montant_ht montant_tva montant_ttc resultat fond_initial montant_compte ecart interets".split())
+MONEY_FIELDS = set("prix prix_achat montant_en_caisse montant_total montant_produits dette_ancienne montant_paye montant_deduit_caisse relicat ristourne retour montant_retour montant_initial montant valeur_achat montant_ht montant_tva montant_ttc resultat fond_initial montant_compte ecart interets cout_achat prix_vente".split())
 DATE_FIELDS = set((COMMON + " timestamp date_commande date_livraison date_charge date_achat date_facture date_echeance "
                     "date_operation date_debut date_fin expires_at termine_at envoye_at date_prevue prochaine_execution "
                     "derniere_execution ouverte_le fermee_le date_origine active_le traite_le notifie_le derniere_activite "
-                    "vu_par_visiteur_le vu_admin_le vu_staff_le notifie_admin_le notifie_staff_le").split())
-INDEX_FIELDS = {"email", "role", "country_code", "code_barre", "deleted_at", "created_at", "date_livraison", "date_charge"}
+                    "vu_par_visiteur_le vu_admin_le vu_staff_le notifie_admin_le notifie_staff_le date_entree date_sortie").split())
+INDEX_FIELDS = {"email", "role", "country_code", "code_barre", "deleted_at", "created_at", "date_livraison", "date_charge",
+                "numero_serie"}
 
 
 def field_type(name):

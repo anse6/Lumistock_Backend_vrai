@@ -143,9 +143,9 @@ def _construire_prompt_analyse(magasin_nom, produits, alertes, ventes_30j, total
 Tu dois générer un rapport quotidien pour le magasin "{magasin_nom}" à la date du {date_rapport}.
 
 DONNÉES DU MAGASIN :
-- Nombre de produits : {len(produits)}
+- Nombre d'articles : {len(produits)}
 - Total livraisons (30 derniers jours) : {total_livraisons}
-- Total ventes par produit (30 jours) :
+- Total ventes par article (30 jours) :
 {chr(10).join(lignes_produits)}
 
 ALERTES DÉTECTÉES AUTOMATIQUEMENT :
@@ -161,10 +161,10 @@ Génère un rapport quotidien clair, professionnel et utile pour l'administrateu
 [Liste des actions urgentes à faire AUJOURD'HUI - approvisionnements nécessaires, etc.]
 
 ## 🟡 Points de Vigilance
-[Produits à surveiller dans les prochains jours]
+[Articles à surveiller dans les prochains jours]
 
 ## 📈 Opportunités Commerciales  
-[Produits bien vendus à mettre en valeur, produits dormants à promouvoir]
+[Articles bien vendus à mettre en valeur, articles dormants à promouvoir]
 
 ## ✅ Recommandations
 [3 à 5 recommandations concrètes et actionnables]

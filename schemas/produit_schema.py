@@ -6,14 +6,22 @@ from marshmallow import Schema, fields, validate
 # Ajout de la classe ConditionnementSchema pour la validation des conditionnements
 class ConditionnementSchema(Schema):
     nom = fields.String(required=True)
-    facteur = fields.Integer(required=True, validate=validate.Range(min=1))
+    # Facteur saisi, ou calculé si le conditionnement en contient un autre
+    # (palette = 84 packs) : les règles sont dans services/conditionnements.py.
+    facteur = fields.Integer(required=False, allow_none=True, validate=validate.Range(min=1))
     prix_conditionnement = fields.Float(validate=validate.Range(min=0))  # optionnel
+    contenu_nom = fields.String(required=False, allow_none=True)
+    contenu_nombre = fields.Integer(required=False, allow_none=True)
 
 class ConditionnementUpdateSchema(Schema):
     _id = fields.String(required=False)  # Si fourni, indique une MAJ
     nom = fields.String(required=True)
-    facteur = fields.Integer(required=True, validate=validate.Range(min=1))
+    # Facteur saisi, ou calculé si le conditionnement en contient un autre
+    # (palette = 84 packs) : les règles sont dans services/conditionnements.py.
+    facteur = fields.Integer(required=False, allow_none=True, validate=validate.Range(min=1))
     prix_conditionnement = fields.Float(validate=validate.Range(min=0))  # optionnel
+    contenu_nom = fields.String(required=False, allow_none=True)
+    contenu_nombre = fields.Integer(required=False, allow_none=True)
 
 
 class CreateProduitSchema(Schema):
@@ -33,6 +41,9 @@ class CreateProduitSchema(Schema):
     seuil_alerte = fields.Integer(required=False, validate=validate.Range(min=0))
     reference_fournisseur = fields.String(required=False)
     admin_id = fields.String(required=False)  # ID de l'utilisateur qui crée le produit
+    # Suivi par numéro de série : un numéro par unité du stock initial.
+    suivi_serie = fields.Boolean(required=False)
+    numeros_serie = fields.List(fields.String(), required=False)
 
     
     
@@ -52,12 +63,15 @@ class UpdateProduitSchema(Schema):
     seuil_alerte = fields.Integer(required=False, validate=validate.Range(min=0))
     reference_fournisseur = fields.String(required=False)
     admin_id = fields.String(required=False)  # ID de l'utilisateur qui met à jour le produit
+    suivi_serie = fields.Boolean(required=False)
+    numeros_serie = fields.List(fields.String(), required=False)
 
 class ExpiredProductSchema(Schema):
     quantite = fields.Integer(required=True, validate=validate.Range(min=1))
     type_avarie = fields.String(required=False)  # perime, casse, vol, deteriore, autre
     description = fields.String(required=False)  # Détails de l'avarie
     responsable = fields.String(required=False)  # Personne qui signale
+    numeros_serie = fields.List(fields.String(), required=False)  # unités avariées (articles suivis)
 
 
 class SolderAvarieSchema(Schema):

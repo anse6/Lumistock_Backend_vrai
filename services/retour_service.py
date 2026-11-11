@@ -183,6 +183,9 @@ def creer_retour_livraison(data):
 
     montant_ristourne_retour = 0
     total_retournes = {}
+    # Articles suivis par numéro de série : quelles unités reviennent.
+    from services import numeros_serie_service as ns
+    retours_serie = {}
 
     for produit in produits:
         key = (
@@ -192,7 +195,7 @@ def creer_retour_livraison(data):
         produit_livre = produits_livres_dict.get(key)
 
         if not produit_livre:
-            return {"error": f"Produit non trouvé dans la livraison (clé: {key})"}, 400
+            return {"error": f"Article non trouvé dans la livraison (clé: {key})"}, 400
 
         # Quantité réelle à retourner, en unités : « quantite » (unités) et/ou
         # « quantite_conditionnement » (conditionnements entiers × facteur).
@@ -205,17 +208,38 @@ def creer_retour_livraison(data):
             return {"error": "Quantité retournée invalide"}, 400
 
         if quantite_retour <= 0:
-            return {"error": f"Quantité retournée invalide pour le produit {produit['produit_id']}"}, 400
+            return {"error": f"Quantité retournée invalide pour l'article {produit['produit_id']}"}, 400
 
         quantite_livree = produit_livre["quantite"]
         deja_retournee = total_retournes.get(key, 0)
 
         if quantite_retour + deja_retournee > quantite_livree:
             return {
-                "error": f"Retour impossible : la quantité ({quantite_retour}) dépasse la quantité livrée ({quantite_livree}) pour le produit {produit['produit_id']}"
+                "error": f"Retour impossible : la quantité ({quantite_retour}) dépasse la quantité livrée ({quantite_livree}) pour l'article {produit['produit_id']}"
             }, 400
 
         total_retournes[key] = deja_retournee + quantite_retour
+
+        produit_db = ProduitModel.get_by_id(str(produit["produit_id"]))
+        if produit_livre.get("numeros_serie") or ns.est_suivi(produit_db):
+            try:
+                numeros = ns._liste(produit.get("numeros_serie"))
+            except ns.ErreurNumeroSerie as err:
+                return {"error": str(err)}, 400
+            vendus = {ns.cle(n): n for n in produit_livre.get("numeros_serie") or []}
+            nom = produit_livre.get("nom") or produit["produit_id"]
+            if len(numeros) != quantite_retour:
+                return {"error": f"« {nom} » est suivi par numéro de série : choisissez les {quantite_retour} "
+                                 f"numéro(s) retourné(s) ({len(numeros)} choisi(s))."}, 400
+            hors_vente = [n for n in numeros if ns.cle(n) not in vendus]
+            if hors_vente:
+                return {"error": f"Numéro(s) de série qui ne font pas partie de cette vente : "
+                                 f"{', '.join(hors_vente[:5])}."}, 400
+            deja = {ns.cle(n) for n in retours_serie.get(key, [])}
+            if any(ns.cle(n) in deja for n in numeros) or len({ns.cle(n) for n in numeros}) != len(numeros):
+                return {"error": "Un numéro de série est retourné deux fois."}, 400
+            retours_serie.setdefault(key, []).extend(vendus[ns.cle(n)] for n in numeros)
+            produit["numeros_serie"] = [vendus[ns.cle(n)] for n in numeros]
 
 
     # Réintégration du stock
@@ -288,6 +312,17 @@ def creer_retour_livraison(data):
     # disparaître lors d'un retour partiel de produits.
     dette_ancienne = float(livraison.get("dette_ancienne", 0) or 0)
 
+    for key, numeros in retours_serie.items():
+        try:
+            ns.rentrer(key[0], numeros, "retour", {"admin_id": validated_data.get("manager_id")},
+                       vente_id=livraison_id, motif=validated_data.get("motif"))
+        except ns.ErreurNumeroSerie as err:
+            return {"error": str(err)}, err.statut
+        revenus = {ns.cle(n) for n in numeros}
+        ligne = produits_livres_dict[key]
+        ligne["numeros_serie"] = [n for n in ligne.get("numeros_serie") or [] if ns.cle(n) not in revenus]
+        ligne.setdefault("numeros_serie_retournes", []).extend(numeros)
+
     # Mise à jour des produits livrés (on soustrait les quantités retournées)
     nouvelle_quantite = 0
     nouveau_montant_produits = 0
@@ -324,8 +359,17 @@ def creer_retour_livraison(data):
     if pourcentage is None:
         from services.cloture_service import politique_retour
         pourcentage = politique_retour(livraison.get("magasin_id"))
-    frais_retour = round(valeur_retour * float(pourcentage or 0) / 100, decimales_magasin(livraison.get("magasin_id")))
+    decimales = decimales_magasin(livraison.get("magasin_id"))
+    frais_retour = round(valeur_retour * float(pourcentage or 0) / 100, decimales)
     frais_cumules = round(float(livraison.get("frais_retour", 0) or 0) + frais_retour, 2)
+    # Les frais sont calculés sur un montant TVA comprise : quand la vente a de
+    # la TVA, ils en contiennent aussi (prestation taxable). Part HT = recette
+    # (compte 7078), part TVA = TVA collectée.
+    if appliquer_tva and taux_tva:
+        frais_retour_ht = round(frais_retour / (1 + float(taux_tva) / 100), decimales)
+    else:
+        frais_retour_ht = frais_retour
+    frais_retour_tva = round(frais_retour - frais_retour_ht, 2)
 
     # ✅ montant_total = produits restants + TVA + dette_ancienne (toujours incluse) + frais de retour
     nouveau_montant_total = round(nouveau_montant_produits + nouveau_montant_tva + dette_ancienne + frais_cumules, 2)
@@ -374,6 +418,8 @@ def creer_retour_livraison(data):
     validated_data['cout_retour'] = cout_retour
     validated_data['retenue_pourcentage'] = float(pourcentage or 0)
     validated_data['frais_retour'] = frais_retour
+    validated_data['frais_retour_ht'] = frais_retour_ht
+    validated_data['frais_retour_tva'] = frais_retour_tva
     retour_id = RetourLivraisonModel.enregistrer_retour(validated_data, magasin_id=livraison.get("magasin_id"))
 
 
@@ -408,5 +454,7 @@ def creer_retour_livraison(data):
         "montant_a_rembourser": surplus_client,
         "total_a_rembourser": a_rembourser,
         "frais_retour": frais_retour,
+        "frais_retour_ht": frais_retour_ht,
+        "frais_retour_tva": frais_retour_tva,
         "retenue_pourcentage": float(pourcentage or 0),
     }, 201

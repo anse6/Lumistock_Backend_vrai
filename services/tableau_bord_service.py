@@ -215,7 +215,7 @@ def onglet_stock(magasin_id, jours=30):
                 derniere_vente[m["produit"]] = m["date"]
 
     total = {pid: en_magasin.get(pid, 0) + chez_gerants.get(pid, 0) for pid in en_magasin}
-    noms = {str(p["_id"]): p.get("nom") or "Produit" for p in tous}
+    noms = {str(p["_id"]): p.get("nom") or "Article" for p in tous}
     couverture = []
     for pid, qte in vendus.items():
         if pid not in total or qte <= 0:
@@ -317,22 +317,26 @@ def onglet_ventes(magasin_id, jours=30):
     remises = brut = 0.0
     for v in courantes:
         quand = _date_vente(v)
-        ht = _num(v.get("montant_produits")) or sum(_num(l.get("quantite")) * _num(l.get("prix")) for l in v.get("produits") or [])
+        ht = _num(v.get("montant_produits")) if v.get("montant_produits") is not None else sum(_num(l.get("quantite")) * _num(l.get("prix")) for l in v.get("produits") or [])
         chaleur[quand.weekday()][quand.hour]["ventes"] += 1
         chaleur[quand.weekday()][quand.hour]["ca"] += ht
         if (cle := per.intervalle(quand)) is not None:
             par_intervalle[cle]["ventes"] += 1
             par_intervalle[cle]["ca"] += ht
         remises += _num(v.get("total_reductions"))
+        # Les remises de la vente sont réparties sur ses lignes : la somme des
+        # catégories (et des articles) retombe sur le chiffre d'affaires HT.
+        brut_vente = sum(_num(l.get("quantite")) * _num(l.get("prix")) for l in v.get("produits") or [])
+        part = ht / brut_vente if brut_vente else 0.0
         for l in v.get("produits") or []:
             pid = str(l.get("produit_id"))
             q, pu, pa = _num(l.get("quantite")), _num(l.get("prix")), _num(l.get("prix_achat"))
             brut += q * pu
             for cible in (par_produit[pid], par_categorie[categories.get(categorie_produit.get(pid, ""), "Sans catégorie")]):
                 cible["quantite"] += q
-                cible["ca"] += q * pu
+                cible["ca"] += q * pu * part
                 cible["cout"] += q * pa
-            par_produit[pid]["nom"] = l.get("nom") or par_produit[pid]["nom"] or "Produit"
+            par_produit[pid]["nom"] = l.get("nom") or par_produit[pid]["nom"] or "Article"
 
     def avec_marge(d):
         marge = d["ca"] - d["cout"]
@@ -353,7 +357,7 @@ def onglet_ventes(magasin_id, jours=30):
         montant_retours += montant
         for p in r.get("produits") or []:
             pid = str(p.get("produit_id"))
-            retours_produits[pid]["nom"] = p.get("nom") or retours_produits[pid]["nom"] or "Produit"
+            retours_produits[pid]["nom"] = p.get("nom") or retours_produits[pid]["nom"] or "Article"
             retours_produits[pid]["quantite"] += _num(p.get("quantite"))
 
     nb = len(courantes)
@@ -482,10 +486,10 @@ def onglet_finances(magasin_id, jours=30):
     etapes = [
         ("ventes_brutes", "Ventes HT", r["ventes_brutes"], "total"),
         ("retours", "Retours clients", -r["retours"], "delta"),
-        ("ca", "Chiffre d'affaires net", r["ca"], "total"),
+        ("ca", "Ventes nettes de marchandises", r["ca"], "total"),
         ("cout", "Coût des marchandises vendues", -r["cout"], "delta"),
         ("marge", "Marge brute", r["marge"], "total"),
-        ("frais_retour", "Frais de retour retenus", r["frais_retour"], "delta"),
+        ("frais_retour", "Frais de retour retenus (HT)", r["frais_retour"], "delta"),
         ("pertes", "Pertes et avaries", -r["pertes"], "delta"),
         ("externes", "Charges externes", -r["externes"], "delta"),
         ("personnel", "Personnel", -r["personnel"], "delta"),
@@ -596,6 +600,7 @@ def onglet_equipe(magasin_id, jours=30):
         resultat.append({
             "id": uid,
             "nom": f"{u.get('first_name', '')} {u.get('name', '')}".strip() or u.get("email") or "—",
+            "email": u.get("email") or None,
             "role": role,
             "actif": bool(u.get("is_active")),
             "ventes": s["ventes"], "ca": _arr(s["ca"]), "articles": _arr(s["articles"], 3),

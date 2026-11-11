@@ -53,10 +53,12 @@ def test_compte_de_resultat_tresorerie_et_tva(client, app, magasins):
     d = _get(client, a, f"/compta/synthese?{PERIODE}")
     lignes = {l["cle"]: l["montant"] for l in d["compte_resultat"]}
     assert lignes["ca"] == 3000 and lignes["cout"] == 1000 and lignes["marge"] == 2000
-    assert lignes["pertes"] == 240  # 2 × 120, dernier prix d'achat
+    # CMUP : 10 restants à 100 + 5 à 120 → coût moyen 106,67 ; 2 avariés = 213,33
+    # (et non 2 × 120 : le dernier prix d'achat n'est pas le coût du stock).
+    assert lignes["pertes"] == pytest.approx(213.33, abs=0.01)
     assert lignes["externes"] == 60000  # 50 000 + 10 000 HT
     assert lignes["cat_loyer"] == 50000 and lignes["cat_electricite"] == 10000
-    assert lignes["net"] == 2000 - 240 - 60000
+    assert lignes["net"] == pytest.approx(2000 - 213.33 - 60000, abs=0.01)
     assert d["indicateurs"]["taux_marge"] == 66.7
 
     t = d["tresorerie"]
