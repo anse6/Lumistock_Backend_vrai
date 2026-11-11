@@ -16,6 +16,7 @@ from bson import ObjectId
 from extensions import db
 from models.client_model import ClientModel
 from models.livraison_model import LivraisonModel
+from utils.dates import iso_utc
 
 MODES_REGLEMENT = ("cash", "om", "momo", "bancaire")
 
@@ -86,8 +87,8 @@ def serialiser_dette_ouverture(dette):
         "date_origine": dette["date_origine"].isoformat() if isinstance(dette.get("date_origine"), datetime) else None,
         "note": dette.get("note") or "",
         "cree_par": str(dette.get("cree_par") or ""),
-        "created_at": dette["created_at"].isoformat() if isinstance(dette.get("created_at"), datetime) else None,
-        "paiements": [{**p, "date": p["date"].isoformat() if isinstance(p.get("date"), datetime) else p.get("date")}
+        "created_at": iso_utc(dette.get("created_at")) if isinstance(dette.get("created_at"), datetime) else None,
+        "paiements": [{**p, "date": iso_utc(p.get("date"))}
                       for p in dette.get("paiements") or []],
     }
 
@@ -174,7 +175,7 @@ def situation_client(client, livreur_id=None):
         ventes.append({
             "livraison_id": str(l["_id"]),
             "facture": numero_facture(l["_id"]),
-            "date": quand.isoformat() if isinstance(quand, datetime) else None,
+            "date": iso_utc(quand) if isinstance(quand, datetime) else None,
             "montant_total": round(_num(l.get("montant_total")), 2),
             "montant_paye": round(_num(l.get("montant_paye")), 2),
             "reste": round(_num(l.get("montant_total")) - _num(l.get("montant_paye")), 2),

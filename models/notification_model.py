@@ -4,6 +4,7 @@ from datetime import datetime
 from bson import ObjectId
 from extensions import db
 from utils.inject_magasin_id import inject_magasin_id
+from utils.dates import iso_utc
 
 
 
@@ -51,7 +52,7 @@ class NotificationModel:
             "message": n["message"],
             "vu" : n.get("vu", False),
             "archivee": n.get("archivee", False),
-            "created_at": n["created_at"].isoformat()
+            "created_at": iso_utc(n["created_at"])
         } for n in notifications]
 
     @staticmethod

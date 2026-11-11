@@ -14,6 +14,7 @@ from flask import request
 from datetime import datetime
 from services import numeros_serie_service
 from services.numeros_serie_service import ErreurNumeroSerie
+from utils.dates import iso_utc
 
 
 def _vrai(valeur):
@@ -97,7 +98,7 @@ def resume_avaries(mouvements, produit=None):
     return {
         "quantite_totale": sum(abs(int(m.get("quantite") or 0)) for m in avaries),
         "nombre": len(avaries),
-        "derniere_date": date.isoformat() if isinstance(date, datetime) else date,
+        "derniere_date": iso_utc(date),
         "dernier_type": derniere.get("type_avarie") or "perime",
         "derniere_description": derniere.get("description"),
         "quantite_mise_en_solde": mise_en_solde,
@@ -829,8 +830,7 @@ def get_all_magasin_mouvements_service(magasin_id, year=None, type_mouvement=Non
 
     # Formatter les dates pour le JSON
     for m in tous_les_mouvements:
-        if isinstance(m.get("date"), datetime):
-            m["date"] = m["date"].isoformat()
+        m["date"] = iso_utc(m.get("date"))
             
     return {
         "year": year,

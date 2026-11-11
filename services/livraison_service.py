@@ -18,6 +18,7 @@ from services import tva_service
 from services.lignes_vente import valider_lignes_vente, quantites_par_produit
 from services import numeros_serie_service
 from services.numeros_serie_service import ErreurNumeroSerie
+from utils.dates import iso_utc, utc_naif
 
 
 DETTE_ANCIENNE_REFUSEE = (
@@ -441,7 +442,10 @@ def _paiement_modification(livraison, validated_data, update_fields, montant_tot
     :return: le statut de paiement.
     """
     deja_rembourse = float(livraison.get("montant_rembourse", 0) or 0)
-    paiements = validated_data.get("paiements", [])
+    # Les dates reviennent de l'écran avec « Z » (iso_utc) : on les garde
+    # enregistrées comme avant, en UTC sans fuseau.
+    paiements = [{**p, "date": utc_naif(p.get("date"))} if isinstance(p, dict) and p.get("date") else p
+                 for p in validated_data.get("paiements", []) or []]
     if paiements:
         if len(paiements) == 1 and paiements[0].get("montant") in (None, ""):
             recu = montant_total  # un paiement unique sans montant couvre tout
@@ -762,13 +766,6 @@ def etat_vente(livraison):
     return "validee"
 
 
-def _iso_utc(valeur):
-    """Date UTC naïve de la base -> texte ISO avec « Z » (déjà texte : inchangé)."""
-    if isinstance(valeur, datetime):
-        return valeur.isoformat() + ("Z" if valeur.tzinfo is None else "")
-    return str(valeur) if valeur is not None and not isinstance(valeur, str) else valeur
-
-
 def serialize_livraison(livraison):
     # Récupération des informations du client
     client_data = ClientModel.get_client_by_id(livraison["client_id"])
@@ -834,7 +831,8 @@ def serialize_livraison(livraison):
         "ristourne": ristourne,
         "have_ristourne": livraison.get("have_ristourne", False),
         "have_retour": livraison.get("have_retour", False),
-        "remboursements": livraison.get("remboursements", []),
+        "remboursements": [{**r, "date": iso_utc(r.get("date"))} if isinstance(r, dict) else r
+                           for r in livraison.get("remboursements", []) or []],
         # Cumul remboursé : l'historique fait foi (les premiers remboursements
         # sont antérieurs au compteur montant_rembourse).
         "montant_rembourse": round_float(max(
@@ -844,15 +842,17 @@ def serialize_livraison(livraison):
         "montant_retourne": round_float(livraison.get("montant_retourne", 0)),
         "frais_retour": round_float(livraison.get("frais_retour", 0)),
         "methode_paiement": livraison.get("methode_paiement", "cash"),
-        "paiements": livraison.get("paiements", []),
+        "paiements": [{**p, "date": iso_utc(p.get("date"))} if isinstance(p, dict) and p.get("date") else p
+                      for p in livraison.get("paiements", []) or []],
         # Dates enregistrées en UTC : le « Z » permet au navigateur de les
         # afficher (et de les filtrer par jour) à l'heure locale du magasin.
-        "date_commande": _iso_utc(livraison["date_commande"]),
-        "created_at": _iso_utc(livraison["created_at"]),
-        "updated_at": _iso_utc(livraison["updated_at"]),
+        "date_commande": iso_utc(livraison["date_commande"]),
+        "created_at": iso_utc(livraison["created_at"]),
+        "updated_at": iso_utc(livraison["updated_at"]),
         # Vente annulée (corbeille) : quand, par qui, et l'argent rendu au client.
-        "deleted_at": _iso_utc(livraison.get("deleted_at")),
-        "annulation": livraison.get("annulation"),
+        "deleted_at": iso_utc(livraison.get("deleted_at")),
+        "annulation": ({**livraison["annulation"], "date": iso_utc(livraison["annulation"].get("date"))}
+                       if isinstance(livraison.get("annulation"), dict) else livraison.get("annulation")),
     }
 
     # Ajout des retours si have_ristourne est True
@@ -1544,8 +1544,8 @@ def ajouter_paiement_service(livraison_id, montant, methode=None, par=None):
     resultat["livreur_id"] = str(resultat["livreur_id"])
     resultat["client_id"] = str(resultat["client_id"])
     resultat["magasin_id"] = str(resultat["magasin_id"])
-    resultat["created_at"] = resultat["created_at"].isoformat()
-    resultat["updated_at"] = resultat["updated_at"].isoformat()
+    resultat["created_at"] = iso_utc(resultat["created_at"])
+    resultat["updated_at"] = iso_utc(resultat["updated_at"])
 
     reponse = {
         "message": "Paiement mis à jour avec succès",

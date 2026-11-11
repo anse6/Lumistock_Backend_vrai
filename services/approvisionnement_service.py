@@ -7,6 +7,7 @@ from marshmallow import ValidationError
 from utils.error_handler import verifier_produits_approvisionnement_valide
 from models.user_model import UserModel 
 from bson import ObjectId
+from utils.dates import iso_utc
 
 
 def _refus_articles_suivis(produits):
@@ -156,7 +157,7 @@ def serialize_approvisionnement(approvisionnement_data):
         "approvisionne_par": auteur,
         "modifie_par": modifie_par,
         "updated_at": (
-            approvisionnement_data["updated_at"].isoformat()
+            iso_utc(approvisionnement_data["updated_at"])
             if isinstance(approvisionnement_data.get("updated_at"), datetime)
             else approvisionnement_data.get("updated_at")
         ),
@@ -166,7 +167,7 @@ def serialize_approvisionnement(approvisionnement_data):
         "quantite_stock_total":quantite_stock_total,
         "produits" : produits,
         "created_at": (
-            approvisionnement_data["created_at"].isoformat()
+            iso_utc(approvisionnement_data["created_at"])
             if isinstance(approvisionnement_data["created_at"], datetime)
             else str(approvisionnement_data["created_at"])
         ),

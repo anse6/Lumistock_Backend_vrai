@@ -6,6 +6,7 @@ from models.client_model import ClientModel
 from models.livraison_model import LivraisonModel
 from models.user_model import UserModel
 from utils.re import clean_string
+from utils.dates import iso_utc
 
 NOM_CLIENT_PAR_DEFAUT = "Autres"  # client de passage, créé automatiquement
 EXTENSIONS_PHOTO = {"png", "jpg", "jpeg", "webp", "gif"}
@@ -429,7 +430,7 @@ def get_clients_magasins(filters=None, magasin_id=None):
                 "created_by": str(client.get("created_by") or ""),
                 "created_by_name": "",
                 "created_by_first_name": "",
-                "created_at": client["created_at"].isoformat() if hasattr(client.get("created_at"), "isoformat") else client.get("created_at"),
+                "created_at": iso_utc(client.get("created_at")),
             })
 
             creator_id = str(client.get("created_by", ""))

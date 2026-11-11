@@ -36,6 +36,7 @@ def _message_erreurs(errors):
 from services.livraison_service import get_client_livraisons_service
 from services import compte_client_service
 from models.user_model import UserModel
+from utils.dates import iso_utc
 
 
 client_bp = Blueprint("client", __name__, url_prefix="/clients")
@@ -357,7 +358,7 @@ def get_client(client_id):
     client["dette"] = dette_client(client_id, client["magasin_id"])
     # Fiche complète pour le détail : date ISO et auteur de la création.
     if hasattr(client.get("created_at"), "isoformat"):
-        client["created_at"] = client["created_at"].isoformat()
+        client["created_at"] = iso_utc(client["created_at"])
     auteur = UserModel.get_user_by_id(client["created_by"]) if client.get("created_by") else None
     client["created_by"] = str(client["created_by"]) if client.get("created_by") else None
     client["created_by_nom"] = f"{auteur.get('first_name', '')} {auteur.get('name', '')}".strip() if auteur else None
