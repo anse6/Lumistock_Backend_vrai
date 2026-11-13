@@ -207,9 +207,11 @@ def register():
 
         # Anti-robots : champ invisible pour un humain (rempli = robot) et
         # limite d'inscriptions par adresse IP.
-        from utils.rate_limit import limite_atteinte
-        if str(data.pop("site_internet_societe", "") or "").strip():
-            return jsonify({"message": "Inscription refusée."}), 400
+        # Une adresse email dans le piège = remplissage automatique du navigateur
+        # (Chrome y mettait l'email de l'inscrit), pas un robot : voir piege_rempli.
+        from utils.rate_limit import limite_atteinte, piege_rempli
+        if piege_rempli(data.pop("site_internet_societe", None)):
+            return jsonify({"message": "Inscription refusée par la protection anti-robots. Rechargez la page et réessayez."}), 400
         if limite_atteinte(f"inscription-ip:{request.remote_addr or 'inconnue'}", 5, 60 * 60):
             return jsonify({"message": "Trop d'inscriptions depuis cette connexion. Réessayez dans une heure."}), 429
         if isinstance(data.get("accepte_conditions"), str):

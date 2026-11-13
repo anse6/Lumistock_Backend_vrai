@@ -501,6 +501,17 @@ def test_inscription_refusee_sans_conditions_ou_par_un_robot(client, app, setup_
         assert MagasinModel.get_magasin_by_email("publique@test.com") is None
 
 
+def test_inscription_acceptee_si_le_navigateur_remplit_le_piege_avec_un_email(client, app, setup_magasins):
+    """Chrome remplissait le champ anti-robots avec l'email de l'inscrit : ce
+    n'est pas un robot, l'inscription doit passer."""
+    with patch("services.magasin_service.send_registration_pending_email"):
+        r = client.post("/magasin/register", json={**_INSCRIPTION, "site_internet_societe": "publique@test.com"})
+        assert r.status_code == 201, r.get_json()
+    with app.app_context():
+        assert MagasinModel.get_magasin_by_email("publique@test.com") is not None
+    _nettoyer_inscription(app)
+
+
 def test_inscriptions_limitees_par_adresse_ip(client, app, setup_magasins):
     with patch("services.magasin_service.send_registration_pending_email"):
         statuts = [client.post("/magasin/register", json={**_INSCRIPTION, "email": f"spam{i}@test.com",
